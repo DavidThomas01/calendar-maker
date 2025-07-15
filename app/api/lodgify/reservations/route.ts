@@ -108,10 +108,12 @@ export async function GET(request: NextRequest) {
     // Count reservations by property to verify we have data from all properties
     const propertyStats: Record<number, number> = {};
     const statusStats: Record<string, number> = {};
+    const sourceStats: Record<string, number> = {};
     
     allReservations.forEach(reservation => {
       const propertyId = reservation.property_id;
       const status = reservation.status;
+      const source = reservation.source || 'no_source';
       
       if (!propertyStats[propertyId]) {
         propertyStats[propertyId] = 0;
@@ -122,11 +124,23 @@ export async function GET(request: NextRequest) {
         statusStats[status] = 0;
       }
       statusStats[status]++;
+      
+      if (!sourceStats[source]) {
+        sourceStats[source] = 0;
+      }
+      sourceStats[source]++;
     });
 
     console.log('Confirmed reservations per property:', propertyStats);
     console.log('Status breakdown:', statusStats);
+    console.log('📊 SOURCE BREAKDOWN (Lodgify actual values):', sourceStats);
     console.log(`Data from ${Object.keys(propertyStats).length} properties found`);
+    
+    // Log some sample reservations to see the actual source field values
+    console.log('🔍 SAMPLE RESERVATIONS WITH SOURCES:');
+    allReservations.slice(0, 5).forEach((res, index) => {
+      console.log(`  ${index + 1}. ID: ${res.id}, Source: "${res.source}", Guest: ${res.guest?.name || 'N/A'}`);
+    });
 
     // Return all confirmed reservations in the same format as before
     const result = {
@@ -136,6 +150,7 @@ export async function GET(request: NextRequest) {
       propertiesFound: Object.keys(propertyStats).length,
       propertyStats: propertyStats,
       statusStats: statusStats,
+      sourceStats: sourceStats,
       filterApplied: !includeAll ? `Confirmed only (${CONFIRMED_STATUSES.join(', ')})` : 'All statuses included'
     };
 

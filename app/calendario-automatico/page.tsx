@@ -45,6 +45,27 @@ interface LodgifyReservation {
   status: string;
 }
 
+// Helper to convert Roman numerals to numbers
+function romanToNumber(roman: string): number {
+  if (!roman) return 0;
+  const map: Record<string, number> = {I:1, V:5, X:10, L:50, C:100, D:500, M:1000};
+  let num = 0, prev = 0;
+  for (let i = roman.length - 1; i >= 0; i--) {
+    const curr = map[roman[i]] || 0;
+    if (curr < prev) num -= curr;
+    else num += curr;
+    prev = curr;
+  }
+  return num;
+}
+
+// Helper to extract the Roman numeral from the apartment name
+function extractRomanNumeral(name: string): string {
+  // Match 'Madrid' + space + (Roman numeral) + ',' or space
+  const match = name.match(/Madrid ([IVXLCDM]+)[, ]/i);
+  return match ? match[1] : '';
+}
+
 export default function AutomaticCalendarPage() {
   const [isApiKeySet, setIsApiKeySet] = useState<boolean>(false);
   const [properties, setProperties] = useState<LodgifyProperty[]>([]);
@@ -172,6 +193,20 @@ export default function AutomaticCalendarPage() {
       const reservationsResponse = await response.json();
       const reservationsData: LodgifyReservation[] = reservationsResponse.items || [];
       
+      // Log source breakdown from cached data
+      const sourceBreakdown: Record<string, number> = {};
+      reservationsData.forEach(res => {
+        const source = res.source || 'no_source';
+        sourceBreakdown[source] = (sourceBreakdown[source] || 0) + 1;
+      });
+      console.log('🎯 CACHED SOURCES BREAKDOWN:', sourceBreakdown);
+      
+      // Log sample reservations with sources
+      console.log('🔍 SAMPLE CACHED RESERVATIONS:');
+      reservationsData.slice(0, 3).forEach((res, index) => {
+        console.log(`  ${index + 1}. ID: ${res.id}, Source: "${res.source}", Guest: ${res.guest?.name || 'N/A'}`);
+      });
+
       // Cache the data
       setCachedReservations(reservationsData);
       setCacheStartDate(startDate);
@@ -269,14 +304,33 @@ export default function AutomaticCalendarPage() {
     }, 0) || 1;
 
     const mapSource = (source: string): string => {
+      // Map Lodgify's actual source field values to calendar color system
       const sourceMap: { [key: string]: string } = {
+        // Lodgify integration names (actual API values)
+        'airbnbintegration': 'Airbnb',
+        'bookingintegration': 'Booking.com', 
+        'vrbointegration': 'VRBO',
+        'expediaintegration': 'Expedia',
+        'homeawayintegration': 'VRBO',
+        
+        // Legacy/alternative values (just in case)
         'airbnb': 'Airbnb',
         'booking': 'Booking.com',
+        'booking.com': 'Booking.com',
         'vrbo': 'VRBO',
-        'direct': 'Directo',
-        'expedia': 'Expedia'
+        'homeaway': 'VRBO',
+        'expedia': 'Expedia',
+        'direct': 'Website',
+        'website': 'Website',
+        'manual': 'Website'
       };
-      return sourceMap[source.toLowerCase()] || source;
+      
+      const mapped = sourceMap[source.toLowerCase()] || 'Website';
+      
+      // Log source mapping for debugging
+      console.log(`🔄 Source mapping: "${source}" → "${mapped}"`);
+      
+      return mapped;
     };
 
     return {
@@ -784,11 +838,18 @@ export default function AutomaticCalendarPage() {
                     onChange={(e) => setSelectedCalendarIndex(parseInt(e.target.value))}
                     className="px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500"
                   >
-                    {calendars.map((calendar, index) => (
-                      <option key={index} value={index}>
-                        {calendar.apartmentName}
-                      </option>
-                    ))}
+                    {calendars
+                      .map((calendar, index) => ({ calendar, index }))
+                      .sort((a, b) => {
+                        const aRoman = extractRomanNumeral(a.calendar.apartmentName);
+                        const bRoman = extractRomanNumeral(b.calendar.apartmentName);
+                        return romanToNumber(aRoman) - romanToNumber(bRoman);
+                      })
+                      .map(({ calendar, index }) => (
+                        <option key={index} value={index}>
+                          {calendar.apartmentName}
+                        </option>
+                      ))}
                   </select>
                 </div>
               )}
