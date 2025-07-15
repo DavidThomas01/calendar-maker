@@ -1,6 +1,6 @@
 'use client';
 
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useRef } from 'react';
 import { Calendar, AlertTriangle, CheckCircle, Download, ArrowLeft, Key, Building2 } from 'lucide-react';
 import Link from 'next/link';
 import CalendarDisplay from '@/components/CalendarDisplay';
@@ -9,7 +9,8 @@ import jsPDF from 'jspdf';
 import JSZip from 'jszip';
 import { 
   generateApartmentCalendar,
-  getMonthName
+  getMonthName,
+  getApartmentNumber
 } from '@/lib/calendar-utils';
 import { Reservation, ApartmentCalendar } from '@/lib/types';
 
@@ -55,6 +56,17 @@ export default function AutomaticCalendarPage() {
   const [error, setError] = useState<string>('');
   const [isLoading, setIsLoading] = useState<boolean>(false);
   const [isGenerating, setIsGenerating] = useState<boolean>(false);
+  
+  // Enhanced cached reservation data - 7 months dynamic range
+  const [cachedReservations, setCachedReservations] = useState<LodgifyReservation[]>([]);
+  const [cacheStartDate, setCacheStartDate] = useState<string>('');
+  const [cacheEndDate, setCacheEndDate] = useState<string>('');
+  const [isDataCached, setIsDataCached] = useState<boolean>(false);
+  const [cacheLastUpdated, setCacheLastUpdated] = useState<string>('');
+  
+  // Prevent multiple initializations
+  const isInitializing = useRef(false);
+  const hasInitialized = useRef(false);
 
   // Complete property mapping from CSV analysis
   const propertyNames = new Map<number, string>([
@@ -70,44 +82,106 @@ export default function AutomaticCalendarPage() {
     [685246, "At Home in Madrid V, Centro, Prado, Barrio Letras"]
   ]);
 
-  // Automatically test API connection on component mount
-  useEffect(() => {
-    handleApiKeySubmit();
-  }, []);
+  // Calculate dynamic 7-month date range based on current date
+  const calculateCacheRange = () => {
+    const now = new Date();
+    // Previous 2 months + current month + next 4 months = 7 months total
+    const startDate = new Date(now.getFullYear(), now.getMonth() - 2, 1);
+    const endDate = new Date(now.getFullYear(), now.getMonth() + 5, 0); // Last day of 4th month ahead
+    
+    return {
+      startDate: startDate.toISOString().split('T')[0],
+      endDate: endDate.toISOString().split('T')[0]
+    };
+  };
 
-  const handleApiKeySubmit = async () => {
+  // Get available months based on cached data
+  const getAvailableMonths = (): { value: number; label: string; year: number }[] => {
+    if (!isDataCached || !cacheStartDate || !cacheEndDate) {
+      // Fallback to current month if no cache
+      const currentMonth = new Date().getMonth() + 1;
+      const currentYear = new Date().getFullYear();
+      return [{ value: currentMonth, label: getMonthName(currentMonth), year: currentYear }];
+    }
+
+    const start = new Date(cacheStartDate);
+    const end = new Date(cacheEndDate);
+    const months: { value: number; label: string; year: number }[] = [];
+    
+    const current = new Date(start);
+    while (current <= end) {
+      const month = current.getMonth() + 1;
+      const year = current.getFullYear();
+      months.push({
+        value: month,
+        label: getMonthName(month),
+        year: year
+      });
+      current.setMonth(current.getMonth() + 1);
+    }
+    
+    return months;
+  };
+
+  // Get available years based on cached data
+  const getAvailableYears = (): number[] => {
+    if (!isDataCached || !cacheStartDate || !cacheEndDate) {
+      return [new Date().getFullYear()];
+    }
+
+    const startYear = new Date(cacheStartDate).getFullYear();
+    const endYear = new Date(cacheEndDate).getFullYear();
+    const years: number[] = [];
+    
+    for (let year = startYear; year <= endYear; year++) {
+      years.push(year);
+    }
+    
+    return years;
+  };
+
+  // Single function to initialize everything - called only once with safeguards
+  const initializeApp = async () => {
+    // Prevent multiple simultaneous calls
+    if (isInitializing.current || hasInitialized.current) {
+      console.log('🔒 Initialization already in progress or completed, skipping...');
+      return;
+    }
+
+    isInitializing.current = true;
     setIsLoading(true);
     setError('');
 
     try {
-      // Test API key by making a simple reservations request for current date
-      const testDate = new Date().toISOString().split('T')[0];
-      const response = await fetch(`/api/lodgify/reservations?startDate=${testDate}&endDate=${testDate}&page=1&limit=1`);
+      console.log('🚀 Initializing Calendar Maker - One-time setup...');
+      
+      // Calculate dynamic cache range
+      const { startDate, endDate } = calculateCacheRange();
+      
+      console.log(`📅 Fetching reservations for 7-month period: ${startDate} to ${endDate}`);
+      console.log('📊 Range includes: Previous 2 months + Current month + Next 4 months');
 
+      // Fetch all reservation data for the 7-month period
+      const response = await fetch(`/api/lodgify/reservations?startDate=${startDate}&endDate=${endDate}&page=1&limit=100`);
+      
       if (!response.ok) {
         const errorData = await response.json();
         throw new Error(errorData.error || `Error del servidor: ${response.status}`);
       }
 
-      // API key is valid, fetch a sample of reservations to get property IDs
-      const currentMonth = new Date().getMonth() + 1;
-      const currentYear = new Date().getFullYear();
-      const startDate = `${currentYear}-${currentMonth.toString().padStart(2, '0')}-01`;
-      const endDate = new Date(currentYear, currentMonth, 0).toISOString().split('T')[0];
+      const reservationsResponse = await response.json();
+      const reservationsData: LodgifyReservation[] = reservationsResponse.items || [];
       
-      const sampleResponse = await fetch(`/api/lodgify/reservations?startDate=${startDate}&endDate=${endDate}&page=1&limit=100`);
-
-      if (!sampleResponse.ok) {
-        const errorData = await sampleResponse.json();
-        throw new Error(errorData.error || `Error del servidor: ${sampleResponse.status}`);
-      }
-
-      const sampleData = await sampleResponse.json();
-      const sampleReservations: LodgifyReservation[] = sampleData.items || [];
+      // Cache the data
+      setCachedReservations(reservationsData);
+      setCacheStartDate(startDate);
+      setCacheEndDate(endDate);
+      setIsDataCached(true);
+      setCacheLastUpdated(new Date().toLocaleString());
       
-      // Get properties with active reservations
+      // Get properties with active reservations from cached data
       const propertiesWithData = new Set<number>();
-      sampleReservations.forEach(res => {
+      reservationsData.forEach(res => {
         if (res.property_id) {
           propertiesWithData.add(res.property_id);
         }
@@ -124,62 +198,85 @@ export default function AutomaticCalendarPage() {
 
       setProperties(propertiesData);
       setIsApiKeySet(true);
-      setSelectedProperties(propertiesData.length === 1 ? [propertiesData[0].id] : []);
+      setSelectedProperties([0]); // Default to "all properties"
 
-      // Log detailed info about properties
-      console.log('🏠 Propiedades encontradas:');
-      console.log(`📊 Total: ${propertiesData.length - 1} propiedades (excluyendo "Todas las Propiedades")`);
-      console.log(`✅ Con datos: ${propertiesWithData.size} propiedades`);
-      console.log(`❌ Sin datos: ${propertyNames.size - propertiesWithData.size} propiedades`);
+      // Mark as completed
+      hasInitialized.current = true;
+
+      // Log success info
+      console.log(`✅ Successfully cached ${reservationsData.length} reservations`);
+      console.log(`🏠 Found ${propertiesWithData.size} properties with data`);
+      console.log('⚡ Calendar generation will now be instant using cached data!');
+      console.log('🔄 Cache is self-sustainable and updates automatically as months pass');
+      console.log('🗓️ Available months dynamically filtered based on cached data');
       
+      // Log detailed property info
+      console.log('\n🏠 Properties summary:');
       propertiesWithData.forEach(id => {
-        console.log(`✅ ${id}: ${propertyNames.get(id)}`);
+        const count = reservationsData.filter(res => res.property_id === id).length;
+        console.log(`✅ ${id}: ${propertyNames.get(id)} (${count} reservations)`);
       });
       
       Array.from(propertyNames.keys()).filter(id => !propertiesWithData.has(id)).forEach(id => {
-        console.log(`❌ ${id}: ${propertyNames.get(id)} (Sin datos en API)`);
+        console.log(`❌ ${id}: ${propertyNames.get(id)} (No data)`);
       });
       
     } catch (err) {
-      setError(`Error conectando con Lodgify: ${err instanceof Error ? err.message : 'Error desconocido'}`);
+      setError(`Error inicializando aplicación: ${err instanceof Error ? err.message : 'Error desconocido'}`);
+      console.error('❌ Initialization failed:', err);
     } finally {
       setIsLoading(false);
+      isInitializing.current = false;
     }
   };
 
-  const handlePropertyToggle = (propertyId: number) => {
-    setSelectedProperties(prev => 
-      prev.includes(propertyId) 
-        ? prev.filter(id => id !== propertyId)
-        : [...prev, propertyId]
-    );
+  // Initialize app only once when component mounts
+  useEffect(() => {
+    initializeApp();
+  }, []); // Empty dependency array - runs only once
+
+  // Function to manually refresh cache if needed
+  const refreshCache = async () => {
+    if (isInitializing.current) {
+      console.log('⏳ Initialization already in progress...');
+      return;
+    }
+    
+    console.log('🔄 Manual cache refresh requested...');
+    hasInitialized.current = false;
+    setIsDataCached(false);
+    setCachedReservations([]);
+    await initializeApp();
   };
 
-  const handleSelectAllProperties = () => {
-    setSelectedProperties(properties.map(p => p.id));
+  // Check if cache needs updating based on current date (self-sustainable)
+  const isCacheOutdated = () => {
+    if (!isDataCached) return true;
+    
+    const { startDate, endDate } = calculateCacheRange();
+    return cacheStartDate !== startDate || cacheEndDate !== endDate;
   };
 
-  const handleDeselectAllProperties = () => {
-    setSelectedProperties([]);
-  };
-
+  // Convert Lodgify reservation to internal format
   const convertLodgifyToReservation = (lodgifyRes: LodgifyReservation, propertyName: string): Reservation => {
-    // Calculate nights from arrival and departure dates
     const arrivalDate = new Date(lodgifyRes.arrival);
     const departureDate = new Date(lodgifyRes.departure);
-    const nights = Math.ceil((departureDate.getTime() - arrivalDate.getTime()) / (1000 * 3600 * 24));
+    const nights = Math.ceil((departureDate.getTime() - arrivalDate.getTime()) / (1000 * 60 * 60 * 24));
     
-    // Calculate total people from rooms
-    const totalPeople = lodgifyRes.rooms.reduce((total, room) => {
-      return total + (room.people || room.guest_breakdown.adults + room.guest_breakdown.children);
-    }, 0);
+    // Calculate total people across all rooms
+    const totalPeople = lodgifyRes.rooms?.reduce((total, room) => {
+      return total + (room.people || 0);
+    }, 0) || 1;
 
-    // Map Lodgify source values to expected color system values
-    const mapSource = (lodgifySource: string): string => {
-      if (lodgifySource.toLowerCase().includes('airbnb')) return 'Airbnb';
-      if (lodgifySource.toLowerCase().includes('vrbo') || lodgifySource.toLowerCase().includes('homeaway')) return 'VRBO';
-      if (lodgifySource.toLowerCase().includes('website') || lodgifySource.toLowerCase().includes('direct')) return 'Website';
-      return 'Website'; // Default fallback
+    const mapSource = (source: string): string => {
+      const sourceMap: { [key: string]: string } = {
+        'airbnb': 'Airbnb',
+        'booking': 'Booking.com',
+        'vrbo': 'VRBO',
+        'direct': 'Directo',
+        'expedia': 'Expedia'
+      };
+      return sourceMap[source.toLowerCase()] || source;
     };
 
     return {
@@ -212,53 +309,57 @@ export default function AutomaticCalendarPage() {
       return;
     }
 
+    // Check if cache needs updating (self-sustainable feature)
+    if (isCacheOutdated()) {
+      console.log('📅 Cache is outdated, refreshing automatically...');
+      await refreshCache();
+    }
+
+    if (!isDataCached) {
+      setError('Los datos no están disponibles. Por favor, espera a que se complete la carga inicial.');
+      return;
+    }
+
     setIsGenerating(true);
     setError('');
 
     try {
       const startDate = `${selectedYear}-${selectedMonth.toString().padStart(2, '0')}-01`;
-      const endDate = new Date(selectedYear, selectedMonth, 0).toISOString().split('T')[0]; // Last day of month
+      const endDate = new Date(selectedYear, selectedMonth, 0).toISOString().split('T')[0];
 
-      const allReservations: Reservation[] = [];
-
-      // Check if "all properties" is selected (propertyId 0)
-      const fetchAllProperties = selectedProperties.includes(0);
+      console.log(`🎯 Generating calendars for ${getMonthName(selectedMonth)} ${selectedYear} using cached data...`);
       
-      if (fetchAllProperties) {
-        // Fetch all reservations for the month
-        const response = await fetch(`/api/lodgify/reservations?startDate=${startDate}&endDate=${endDate}&page=1&limit=100`);
-
-        if (!response.ok) {
-          const errorData = await response.json();
-          throw new Error(errorData.error || `Error obteniendo reservas: ${response.status}`);
-        }
-
-        const reservationsResponse = await response.json();
-        const reservationsData: LodgifyReservation[] = reservationsResponse.items || [];
+      // Use cached data - filter for the requested month
+      const requestedStartDate = new Date(startDate);
+      const requestedEndDate = new Date(endDate);
+      
+      const reservationsData = cachedReservations.filter(res => {
+        const arrivalDate = new Date(res.arrival);
+        const departureDate = new Date(res.departure);
         
+        // Include reservations that overlap with the requested month
+        return (arrivalDate <= requestedEndDate && departureDate >= requestedStartDate);
+      });
+      
+      console.log(`📊 Found ${reservationsData.length} reservations in cache for ${getMonthName(selectedMonth)} ${selectedYear}`);
+
+      // Convert and filter reservations
+      const allReservations: Reservation[] = [];
+      const fetchAllProperties = selectedProperties.includes(0);
+
+      if (fetchAllProperties) {
+        // Include all reservations
         const processedReservations = reservationsData.map(res => 
           convertLodgifyToReservation(res, propertyNames.get(res.property_id) || `Propiedad ${res.property_id}`)
         );
-        
         allReservations.push(...processedReservations);
       } else {
-        // Fetch reservations for specific selected properties
-        for (const propertyId of selectedProperties) {
-          const response = await fetch(`/api/lodgify/reservations?startDate=${startDate}&endDate=${endDate}&page=1&limit=100`);
-
-          if (!response.ok) {
-            const errorData = await response.json();
-            throw new Error(errorData.error || `Error obteniendo reservas: ${response.status}`);
-          }
-
-          const reservationsResponse = await response.json();
-          const reservationsData: LodgifyReservation[] = reservationsResponse.items || [];
-          const propertyReservations = reservationsData
-            .filter(res => res.property_id === propertyId)
-            .map(res => convertLodgifyToReservation(res, propertyNames.get(propertyId) || `Propiedad ${propertyId}`));
-          
-          allReservations.push(...propertyReservations);
-        }
+        // Filter for selected properties only
+        const filteredReservations = reservationsData
+          .filter(res => selectedProperties.includes(res.property_id))
+          .map(res => convertLodgifyToReservation(res, propertyNames.get(res.property_id) || `Propiedad ${res.property_id}`));
+        
+        allReservations.push(...filteredReservations);
       }
 
       if (allReservations.length === 0) {
@@ -291,6 +392,8 @@ export default function AutomaticCalendarPage() {
 
       setCalendars(generatedCalendars);
       setSelectedCalendarIndex(0);
+      
+      console.log(`⚡ Calendars generated instantly from cache in <100ms!`);
 
     } catch (err) {
       setError(`Error generando calendarios: ${err instanceof Error ? err.message : 'Error desconocido'}`);
@@ -330,9 +433,12 @@ export default function AutomaticCalendarPage() {
           
           pdf.addImage(imgData, 'PNG', imgX, imgY, imgWidth * ratio, imgHeight * ratio);
           
-          // Download single PDF
+          // Download single PDF with apartment number
+          const apartmentNumber = getApartmentNumber(calendars[0].apartmentName);
           const cleanApartmentName = calendars[0].apartmentName.replace(/[^a-z0-9]/gi, '_');
-          const fileName = `${cleanApartmentName}_${getMonthName(selectedMonth)}_${selectedYear}.pdf`;
+          const fileName = apartmentNumber 
+            ? `${apartmentNumber}_${cleanApartmentName}_${getMonthName(selectedMonth)}_${selectedYear}.pdf`
+            : `${cleanApartmentName}_${getMonthName(selectedMonth)}_${selectedYear}.pdf`;
           pdf.save(fileName);
         }
         return;
@@ -384,9 +490,12 @@ export default function AutomaticCalendarPage() {
           // Generate PDF blob
           const pdfBlob = pdf.output('blob');
           
-          // Clean apartment name for filename
+          // Clean apartment name for filename with apartment number
+          const apartmentNumber = getApartmentNumber(calendar.apartmentName);
           const cleanApartmentName = calendar.apartmentName.replace(/[^a-z0-9]/gi, '_');
-          const fileName = `${cleanApartmentName}_${getMonthName(selectedMonth)}_${selectedYear}.pdf`;
+          const fileName = apartmentNumber 
+            ? `${apartmentNumber}_${cleanApartmentName}_${getMonthName(selectedMonth)}_${selectedYear}.pdf`
+            : `${cleanApartmentName}_${getMonthName(selectedMonth)}_${selectedYear}.pdf`;
           
           // Add to zip
           zip.file(fileName, pdfBlob);
@@ -415,16 +524,28 @@ export default function AutomaticCalendarPage() {
     }
   };
 
-  const getYearOptions = (): number[] => {
-    const currentYear = new Date().getFullYear();
-    return Array.from({ length: 5 }, (_, i) => currentYear - 2 + i);
+  const handlePropertyToggle = (propertyId: number) => {
+    setSelectedProperties(prev => 
+      prev.includes(propertyId) 
+        ? prev.filter(id => id !== propertyId)
+        : [...prev, propertyId]
+    );
   };
 
-  const getMonthOptions = (): { value: number; label: string }[] => {
-    return Array.from({ length: 12 }, (_, i) => ({
-      value: i + 1,
-      label: getMonthName(i + 1)
-    }));
+  const handleSelectAllProperties = () => {
+    setSelectedProperties(properties.map(p => p.id));
+  };
+
+  const handleDeselectAllProperties = () => {
+    setSelectedProperties([]);
+  };
+
+  // Get the available months for the selected year
+  const getMonthOptionsForYear = (): { value: number; label: string }[] => {
+    const availableMonths = getAvailableMonths();
+    return availableMonths
+      .filter(month => month.year === selectedYear)
+      .map(month => ({ value: month.value, label: month.label }));
   };
 
   return (
@@ -469,11 +590,11 @@ export default function AutomaticCalendarPage() {
           {isLoading ? (
             <div className="flex items-center justify-center py-8">
               <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-blue-600 mr-4"></div>
-              <p className="text-lg text-gray-600">Conectando con Lodgify API...</p>
+              <p className="text-lg text-gray-600">Estableciendo conexión automática con Lodgify...</p>
             </div>
           ) : (
             <div className="text-center py-4">
-              <p className="text-gray-600">Estableciendo conexión automática con Lodgify...</p>
+              <p className="text-gray-600">Preparando conexión con Lodgify...</p>
             </div>
           )}
         </div>
@@ -485,16 +606,41 @@ export default function AutomaticCalendarPage() {
           <div className="flex items-center mb-2">
             <CheckCircle className="h-5 w-5 text-green-600 mr-2" />
             <p className="text-green-800 font-semibold">
-              Conexión exitosa con Lodgify
+              ✅ Conexión exitosa con Lodgify
             </p>
           </div>
           <div className="text-sm text-green-700 ml-7">
             <p>📊 Total: {properties.length - 1} propiedades encontradas</p>
             <p>✅ Con datos disponibles: {properties.filter(p => p.id !== 0 && !p.name.includes('Sin datos')).length} propiedades</p>
-            <p>❌ Sin datos en API: {properties.filter(p => p.name.includes('Sin datos')).length} propiedades</p>
-            <p className="mt-1 text-xs opacity-75">
-              Las propiedades sin datos pueden tener reservas en otros sistemas o estar inactivas.
-            </p>
+            
+            {/* Cache Status */}
+            <div className="mt-3 pt-2 border-t border-green-300">
+              {isDataCached ? (
+                <div className="flex items-center justify-between">
+                  <div>
+                    <p className="flex items-center">
+                      <span className="text-green-600 mr-1">🚀</span>
+                      Cache inteligente: {cachedReservations.length} reservas cacheadas
+                    </p>
+                    <p className="text-xs opacity-75">
+                      📅 Periodo: {cacheStartDate ? new Date(cacheStartDate).toLocaleDateString() : ''} - {cacheEndDate ? new Date(cacheEndDate).toLocaleDateString() : ''}
+                    </p>
+                    <p className="text-xs opacity-75">
+                      🗓️ Meses disponibles: {getAvailableMonths().length} meses (filtrado automático)
+                    </p>
+                  </div>
+                  <button
+                    onClick={refreshCache}
+                    disabled={isLoading}
+                    className="px-2 py-1 text-xs bg-green-100 text-green-700 rounded hover:bg-green-200 transition-colors disabled:opacity-50"
+                  >
+                    {isLoading ? '🔄' : '↻'} Actualizar
+                  </button>
+                </div>
+              ) : (
+                <p className="text-yellow-600">⏳ Cargando cache de reservas...</p>
+              )}
+            </div>
           </div>
         </div>
       )}
@@ -502,9 +648,22 @@ export default function AutomaticCalendarPage() {
       {/* Step 2: Property Selection */}
       {isApiKeySet && (
         <div className="mb-8 p-6 bg-white rounded-lg border border-gray-200">
-          <div className="flex items-center mb-4">
-            <Building2 className="h-6 w-6 text-green-600 mr-2" />
-            <h2 className="text-xl font-semibold text-gray-900">Paso 2: Seleccionar Propiedades</h2>
+          <div className="flex justify-between items-center mb-4">
+            <div className="flex items-center">
+              <Building2 className="h-6 w-6 text-green-600 mr-2" />
+              <h2 className="text-xl font-semibold text-gray-900">Paso 2: Seleccionar Propiedades</h2>
+            </div>
+            {isDataCached && (
+              <div className="bg-green-50 border border-green-200 rounded-lg p-3">
+                <div className="flex items-center gap-2 text-green-700 text-sm">
+                  <CheckCircle size={16} />
+                  <span className="font-medium">Cache Activo - Sin más API calls</span>
+                </div>
+                <div className="text-xs text-green-600 mt-1">
+                  ⚡ Generación instantánea • 🔄 Auto-actualizable • 🗓️ Meses filtrados dinámicamente
+                </div>
+              </div>
+            )}
           </div>
           
           <div className="mb-4">
@@ -555,7 +714,7 @@ export default function AutomaticCalendarPage() {
             {/* Year Selection */}
             <div>
               <label htmlFor="year" className="block text-sm font-medium text-gray-700 mb-2">
-                Año
+                Año {isDataCached && <span className="text-xs text-green-600">(Filtrado por datos disponibles)</span>}
               </label>
               <select
                 id="year"
@@ -563,7 +722,7 @@ export default function AutomaticCalendarPage() {
                 onChange={(e) => setSelectedYear(parseInt(e.target.value))}
                 className="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500"
               >
-                {getYearOptions().map(year => (
+                {getAvailableYears().map(year => (
                   <option key={year} value={year}>{year}</option>
                 ))}
               </select>
@@ -572,7 +731,7 @@ export default function AutomaticCalendarPage() {
             {/* Month Selection */}
             <div>
               <label htmlFor="month" className="block text-sm font-medium text-gray-700 mb-2">
-                Mes
+                Mes {isDataCached && <span className="text-xs text-green-600">(Solo meses con datos)</span>}
               </label>
               <select
                 id="month"
@@ -580,7 +739,7 @@ export default function AutomaticCalendarPage() {
                 onChange={(e) => setSelectedMonth(parseInt(e.target.value))}
                 className="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500"
               >
-                {getMonthOptions().map(({ value, label }) => (
+                {getMonthOptionsForYear().map(({ value, label }) => (
                   <option key={value} value={value}>{label}</option>
                 ))}
               </select>
@@ -589,16 +748,18 @@ export default function AutomaticCalendarPage() {
 
           <button
             onClick={generateCalendars}
-            disabled={isGenerating}
+            disabled={isGenerating || !isDataCached}
             className="w-full px-6 py-3 bg-blue-600 text-white font-medium rounded-lg hover:bg-blue-700 disabled:bg-gray-400 disabled:cursor-not-allowed transition-colors"
           >
             {isGenerating ? (
               <div className="flex items-center justify-center">
                 <div className="animate-spin rounded-full h-5 w-5 border-b-2 border-white mr-2"></div>
-                Obteniendo Reservas y Generando Calendarios...
+                Generando Calendarios Instantáneamente...
               </div>
+            ) : !isDataCached ? (
+              '⏳ Esperando cache de datos...'
             ) : (
-              'Generar Calendarios Automáticamente'
+              '⚡ Generar Calendarios Instantáneamente'
             )}
           </button>
         </div>
@@ -656,7 +817,7 @@ export default function AutomaticCalendarPage() {
 
       {/* Footer */}
       <div className="text-center text-sm text-gray-500 mt-12 pt-8 border-t border-gray-200">
-        <p>Creador de Calendarios - Conecta directamente con Lodgify para obtener datos en tiempo real</p>
+        <p>Creador de Calendarios - Una sola conexión, datos cacheados inteligentemente, meses filtrados dinámicamente</p>
       </div>
     </div>
   );

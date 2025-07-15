@@ -168,7 +168,7 @@ const FileUpload: React.FC<FileUploadProps> = ({ onFileProcessed, onError }) => 
               Name, Source, Status, People, y Nights.
             </p>
             <p className="text-xs text-blue-700 mt-2">
-              Las fechas deben estar en formato YYYY-MM-DD. Solo se incluirán reservas confirmadas (estado: "Booked" o "Open").
+              Las fechas deben estar en formato YYYY-MM-DD. Solo se incluirán reservas confirmadas (estado: &quot;Booked&quot; o &quot;Open&quot;).
             </p>
           </div>
         </div>

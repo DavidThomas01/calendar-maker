@@ -1,5 +1,28 @@
 import { Reservation, CalendarDay, CalendarWeek, ApartmentCalendar, ReservationInfo } from './types';
 
+// Extract apartment number from property name (converts Roman numerals to apartment codes)
+export function getApartmentNumber(propertyName: string): string {
+  const romanToNumber: { [key: string]: string } = {
+    'I': '1C',
+    'II': '2C', 
+    'III': '3C',
+    'IV': '4C',
+    'V': '5C',
+    'VI': '6C',
+    'VII': '7C',
+    'VIII': '8C',
+    'IX': '9C',
+    'X': '10C'
+  };
+
+  // Extract Roman numeral from property name
+  const match = propertyName.match(/At Home in Madrid (I{1,3}|IV|V|VI{0,3}|IX|X)/);
+  if (match && match[1]) {
+    return romanToNumber[match[1]] || '';
+  }
+  return '';
+}
+
 export function parseCSVToReservations(csvData: any[]): Reservation[] {
   return csvData.map(row => ({
     Id: row.Id,

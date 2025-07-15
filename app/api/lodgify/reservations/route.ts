@@ -6,6 +6,16 @@ const LODGIFY_BASE_URL = 'https://api.lodgify.com/v2';
 // Define confirmed status values
 const CONFIRMED_STATUSES = ['Booked', 'confirmed', 'Confirmed'];
 
+// Define the Lodgify reservation interface
+interface LodgifyReservation {
+  id: number;
+  status: string;
+  property_id: number;
+  arrival: string;
+  departure: string;
+  [key: string]: any; // Allow for additional properties
+}
+
 export async function GET(request: NextRequest) {
   try {
     const searchParams = request.nextUrl.searchParams;
@@ -61,7 +71,7 @@ export async function GET(request: NextRequest) {
       }
 
       const data = await response.json();
-      const pageReservations = data.items || data || [];
+      const pageReservations: LodgifyReservation[] = data.items || data || [];
       
       console.log(`Page ${page}: Found ${pageReservations.length} reservations`);
       
@@ -69,7 +79,7 @@ export async function GET(request: NextRequest) {
         // Filter for confirmed reservations only (unless includeAll is true)
         const filteredReservations = includeAll 
           ? pageReservations 
-          : pageReservations.filter(reservation => 
+          : pageReservations.filter((reservation: LodgifyReservation) => 
               CONFIRMED_STATUSES.includes(reservation.status)
             );
         
@@ -96,8 +106,8 @@ export async function GET(request: NextRequest) {
     console.log(`Total confirmed reservations fetched: ${allReservations.length}`);
 
     // Count reservations by property to verify we have data from all properties
-    const propertyStats = {};
-    const statusStats = {};
+    const propertyStats: Record<number, number> = {};
+    const statusStats: Record<string, number> = {};
     
     allReservations.forEach(reservation => {
       const propertyId = reservation.property_id;

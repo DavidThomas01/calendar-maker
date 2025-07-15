@@ -47,7 +47,7 @@ export async function GET(request: NextRequest) {
       } catch (error) {
         results.tests.properties = {
           success: false,
-          error: error.message
+          error: error instanceof Error ? error.message : 'Unknown error'
         };
       }
     }
@@ -112,7 +112,7 @@ export async function GET(request: NextRequest) {
         } catch (error) {
           results.tests[test.name] = {
             success: false,
-            error: error.message
+            error: error instanceof Error ? error.message : 'Unknown error'
           };
         }
       }
@@ -157,7 +157,7 @@ export async function GET(request: NextRequest) {
         } catch (error) {
           results.tests[`property_${propertyId}`] = {
             success: false,
-            error: error.message
+            error: error instanceof Error ? error.message : 'Unknown error'
           };
         }
       }
@@ -205,7 +205,7 @@ export async function GET(request: NextRequest) {
         } catch (error) {
           results.tests[test.name] = {
             success: false,
-            error: error.message
+            error: error instanceof Error ? error.message : 'Unknown error'
           };
         }
       }
@@ -217,7 +217,7 @@ export async function GET(request: NextRequest) {
   } catch (error) {
     console.error('Error in comprehensive Lodgify API test:', error);
     return NextResponse.json(
-      { error: 'Error in comprehensive test', details: error.message },
+      { error: 'Error in comprehensive test', details: error instanceof Error ? error.message : 'Unknown error' },
       { status: 500 }
     );
   }
