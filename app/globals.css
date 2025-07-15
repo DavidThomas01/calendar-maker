@@ -1,0 +1,94 @@
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
+
+/* Print styles for A4 calendar */
+@media print {
+  .print-calendar {
+    -webkit-print-color-adjust: exact;
+    print-color-adjust: exact;
+  }
+  
+  @page {
+    size: A4 portrait;
+    margin: 20mm;
+  }
+  
+  body {
+    font-size: 10pt;
+  }
+  
+  .no-print {
+    display: none !important;
+  }
+}
+
+/* Custom scrollbar */
+::-webkit-scrollbar {
+  width: 8px;
+}
+
+::-webkit-scrollbar-track {
+  background: #f1f1f1;
+}
+
+::-webkit-scrollbar-thumb {
+  background: #888;
+  border-radius: 4px;
+}
+
+::-webkit-scrollbar-thumb:hover {
+  background: #555;
+}
+
+/* Text shadow utility for better readability on colored backgrounds */
+.text-shadow {
+  text-shadow: 0 1px 2px rgba(0, 0, 0, 0.7);
+}
+
+/* Calendar specific styles */
+.calendar-table {
+  font-family: 'Arial', sans-serif;
+  font-size: 14px;
+  table-layout: fixed;
+}
+
+.calendar-table td {
+  min-width: 160px;
+  max-width: 160px;
+  width: 160px;
+  min-height: 208px;
+}
+
+.calendar-table th {
+  min-width: 160px;
+  max-width: 160px;
+  width: 160px;
+}
+
+/* Ensure consistent reservation bar styling */
+.reservation-bar {
+  display: flex;
+  box-sizing: border-box;
+  /* Height, width, and margin are now controlled by inline styles */
+}
+
+/* Print styles improvements */
+@media print {
+  .print-calendar {
+    width: 100% !important;
+    max-width: none !important;
+    margin: 0 !important;
+    padding: 0 !important;
+  }
+  
+  .calendar-table {
+    width: 100% !important;
+    page-break-inside: avoid;
+  }
+  
+  .calendar-table td {
+    min-height: 180px !important;
+    width: 14.28% !important;
+  }
+} 
