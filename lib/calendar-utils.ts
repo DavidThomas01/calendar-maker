@@ -6,21 +6,57 @@ export function getApartmentNumber(propertyName: string): string {
     'I': '1C',
     'II': '2C', 
     'III': '3C',
-    'IV': '4C',
-    'V': '5C',
-    'VI': '6C',
-    'VII': '7C',
-    'VIII': '8C',
-    'IX': '9C',
-    'X': '10C'
+    'IV': '1B',
+    'V': '1E',
+    'VI': '1A',
+    'VII': 'Libertad1',
+    'VIII': '2E',
+    'IX': 'Libertad2',
+    'X': 'Entreplanta'
   };
 
   // Extract Roman numeral from property name
-  const match = propertyName.match(/At Home in Madrid (I{1,3}|IV|V|VI{0,3}|IX|X)/);
+  // Order matters: longer patterns first to avoid partial matches (e.g., IV before I)
+  const match = propertyName.match(/At Home in Madrid (VIII|VII|VI|IX|IV|III|II|X|V|I)\b/);
   if (match && match[1]) {
     return romanToNumber[match[1]] || '';
   }
   return '';
+}
+
+// Extract Roman numeral from apartment name for filename generation
+export function extractRomanNumeral(propertyName: string): string {
+  // Order matters: longer patterns first to avoid partial matches (e.g., IV before I)
+  const match = propertyName.match(/At Home in Madrid (VIII|VII|VI|IX|IV|III|II|X|V|I)\b/);
+  return match ? match[1] : '';
+}
+
+// Generate filename in format: ApartmentNumber_AtHomeInMadrid_RomanNumeral_MonthYear
+export function generateCalendarFilename(apartmentName: string, month: number, year: number): string {
+  const apartmentNumber = getApartmentNumber(apartmentName);
+  const romanNumeral = extractRomanNumeral(apartmentName);
+  const monthName = getMonthName(month);
+  
+  if (apartmentNumber && romanNumeral) {
+    return `${apartmentNumber}_AtHomeInMadrid_${romanNumeral}_${monthName}${year}.pdf`;
+  } else {
+    // Fallback if no Roman numeral found
+    const cleanApartmentName = apartmentName.replace(/[^a-z0-9]/gi, '_');
+    return `${cleanApartmentName}_${monthName}_${year}.pdf`;
+  }
+}
+
+// Generate clean display name for apartment options: ApartmentNumber_AtHomeInMadrid_RomanNumber
+export function generateCleanDisplayName(apartmentName: string): string {
+  const apartmentNumber = getApartmentNumber(apartmentName);
+  const romanNumeral = extractRomanNumeral(apartmentName);
+  
+  if (apartmentNumber && romanNumeral) {
+    return `${apartmentNumber}_AtHomeInMadrid_${romanNumeral}`;
+  } else {
+    // Fallback to original name if no Roman numeral found
+    return apartmentName;
+  }
 }
 
 export function parseCSVToReservations(csvData: any[]): Reservation[] {

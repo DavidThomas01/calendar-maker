@@ -13,7 +13,9 @@ import {
   filterReservationsForMonth, 
   generateApartmentCalendar,
   groupReservationsByApartment,
-  getMonthName
+  getMonthName,
+  generateCalendarFilename,
+  generateCleanDisplayName
 } from '@/lib/calendar-utils';
 import { Reservation, ApartmentCalendar } from '@/lib/types';
 
@@ -146,8 +148,7 @@ export default function CSVUploadPage() {
           pdf.addImage(imgData, 'PNG', imgX, imgY, imgWidth * ratio, imgHeight * ratio);
           
           // Download single PDF
-          const cleanApartmentName = calendars[0].apartmentName.replace(/[^a-z0-9]/gi, '_');
-          const fileName = `${cleanApartmentName}_${getMonthName(selectedMonth)}_${selectedYear}.pdf`;
+          const fileName = generateCalendarFilename(calendars[0].apartmentName, selectedMonth, selectedYear);
           pdf.save(fileName);
         }
         return;
@@ -199,9 +200,8 @@ export default function CSVUploadPage() {
           // Generate PDF blob
           const pdfBlob = pdf.output('blob');
           
-          // Clean apartment name for filename
-          const cleanApartmentName = calendar.apartmentName.replace(/[^a-z0-9]/gi, '_');
-          const fileName = `${cleanApartmentName}_${getMonthName(selectedMonth)}_${selectedYear}.pdf`;
+          // Generate filename using new format
+          const fileName = generateCalendarFilename(calendar.apartmentName, selectedMonth, selectedYear);
           
           // Add to zip
           zip.file(fileName, pdfBlob);
@@ -349,7 +349,7 @@ export default function CSVUploadPage() {
               >
                 <option value="">Todos los Apartamentos</option>
                 {getUniqueApartments().map(apartment => (
-                  <option key={apartment} value={apartment}>{apartment}</option>
+                  <option key={apartment} value={apartment}>{generateCleanDisplayName(apartment)}</option>
                 ))}
               </select>
             </div>
@@ -393,7 +393,7 @@ export default function CSVUploadPage() {
                   >
                     {calendars.map((calendar, index) => (
                       <option key={index} value={index}>
-                        {calendar.apartmentName}
+                        {generateCleanDisplayName(calendar.apartmentName)}
                       </option>
                     ))}
                   </select>

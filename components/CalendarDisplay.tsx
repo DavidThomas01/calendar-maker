@@ -2,7 +2,7 @@
 
 import React, { useRef } from 'react';
 import { ApartmentCalendar, ReservationInfo } from '@/lib/types';
-import { getBookingColor, getMonthName, getApartmentNumber } from '@/lib/calendar-utils';
+import { getBookingColor, getMonthName, getApartmentNumber, generateCalendarFilename } from '@/lib/calendar-utils';
 import { Download } from 'lucide-react';
 import html2canvas from 'html2canvas';
 import jsPDF from 'jspdf';
@@ -50,12 +50,8 @@ const CalendarDisplay: React.FC<CalendarDisplayProps> = ({ calendar, onDownload 
         
         pdf.addImage(imgData, 'PNG', imgX, imgY, imgWidth * ratio, imgHeight * ratio);
         
-        // Save PDF with apartment number
-        const apartmentNumber = getApartmentNumber(calendar.apartmentName);
-        const cleanApartmentName = calendar.apartmentName.replace(/[^a-z0-9]/gi, '_');
-        const fileName = apartmentNumber 
-          ? `${apartmentNumber}_${cleanApartmentName}_${getMonthName(calendar.month)}_${calendar.year}.pdf`
-          : `${cleanApartmentName}_${getMonthName(calendar.month)}_${calendar.year}.pdf`;
+        // Save PDF with new filename format
+        const fileName = generateCalendarFilename(calendar.apartmentName, calendar.month, calendar.year);
         pdf.save(fileName);
       } catch (error) {
         console.error('Error generating PDF:', error);

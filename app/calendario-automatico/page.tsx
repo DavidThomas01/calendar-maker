@@ -10,7 +10,9 @@ import JSZip from 'jszip';
 import { 
   generateApartmentCalendar,
   getMonthName,
-  getApartmentNumber
+  getApartmentNumber,
+  generateCalendarFilename,
+  generateCleanDisplayName
 } from '@/lib/calendar-utils';
 import { Reservation, ApartmentCalendar } from '@/lib/types';
 
@@ -77,6 +79,7 @@ export default function AutomaticCalendarPage() {
   const [error, setError] = useState<string>('');
   const [isLoading, setIsLoading] = useState<boolean>(false);
   const [isGenerating, setIsGenerating] = useState<boolean>(false);
+  const [isDownloading, setIsDownloading] = useState<boolean>(false);
   
   // Enhanced cached reservation data - 7 months dynamic range
   const [cachedReservations, setCachedReservations] = useState<LodgifyReservation[]>([]);
@@ -222,11 +225,14 @@ export default function AutomaticCalendarPage() {
         }
       });
 
-      // Create properties list from our complete mapping
-      const propertiesData: LodgifyProperty[] = Array.from(propertyNames.entries()).map(([id, name]) => ({
-        id,
-        name: propertiesWithData.has(id) ? name : `${name} (Sin datos disponibles)`
-      }));
+      // Create properties list from our complete mapping with clean display names
+      const propertiesData: LodgifyProperty[] = Array.from(propertyNames.entries()).map(([id, name]) => {
+        const displayName = generateCleanDisplayName(name);
+        return {
+          id,
+          name: propertiesWithData.has(id) ? displayName : `${displayName} (Sin datos disponibles)`
+        };
+      });
 
       // Add "all properties" option
       propertiesData.unshift({ id: 0, name: 'Todas las Propiedades con Datos Disponibles' });
@@ -432,9 +438,29 @@ export default function AutomaticCalendarPage() {
         groupedReservations.get(propertyName)!.push(reservation);
       });
 
-      // Generate calendars
+      // Generate calendars for ALL selected properties (even if no reservations)
       const generatedCalendars: ApartmentCalendar[] = [];
-      for (const [propertyName, reservations] of groupedReservations) {
+      
+      // Get the selected property names
+      const selectedPropertyNames = new Set<string>();
+      if (fetchAllProperties) {
+        // Include all properties with data
+        Array.from(propertyNames.entries()).forEach(([id, name]) => {
+          selectedPropertyNames.add(name);
+        });
+      } else {
+        // Include only selected properties
+        selectedProperties.forEach(propertyId => {
+          const propertyName = propertyNames.get(propertyId);
+          if (propertyName) {
+            selectedPropertyNames.add(propertyName);
+          }
+        });
+      }
+
+      // Generate calendar for each selected property
+      for (const propertyName of selectedPropertyNames) {
+        const reservations = groupedReservations.get(propertyName) || []; // Empty array if no reservations
         const calendar = generateApartmentCalendar(
           propertyName,
           reservations,
@@ -459,6 +485,8 @@ export default function AutomaticCalendarPage() {
   const handleBulkDownload = async () => {
     if (calendars.length === 0) return;
 
+    setIsDownloading(true);
+    
     try {
       // If only one calendar, download as single PDF
       if (calendars.length === 1) {
@@ -544,12 +572,8 @@ export default function AutomaticCalendarPage() {
           // Generate PDF blob
           const pdfBlob = pdf.output('blob');
           
-          // Clean apartment name for filename with apartment number
-          const apartmentNumber = getApartmentNumber(calendar.apartmentName);
-          const cleanApartmentName = calendar.apartmentName.replace(/[^a-z0-9]/gi, '_');
-          const fileName = apartmentNumber 
-            ? `${apartmentNumber}_${cleanApartmentName}_${getMonthName(selectedMonth)}_${selectedYear}.pdf`
-            : `${cleanApartmentName}_${getMonthName(selectedMonth)}_${selectedYear}.pdf`;
+          // Generate filename using new format
+          const fileName = generateCalendarFilename(calendar.apartmentName, selectedMonth, selectedYear);
           
           // Add to zip
           zip.file(fileName, pdfBlob);
@@ -575,6 +599,8 @@ export default function AutomaticCalendarPage() {
     } catch (error) {
       console.error('Error generating bulk PDF:', error);
       setError('Error generando descarga masiva de PDF');
+    } finally {
+      setIsDownloading(false);
     }
   };
 
@@ -847,7 +873,7 @@ export default function AutomaticCalendarPage() {
                       })
                       .map(({ calendar, index }) => (
                         <option key={index} value={index}>
-                          {calendar.apartmentName}
+                          {generateCleanDisplayName(calendar.apartmentName)}
                         </option>
                       ))}
                   </select>
@@ -855,10 +881,20 @@ export default function AutomaticCalendarPage() {
               )}
               <button
                 onClick={handleBulkDownload}
-                className="flex items-center gap-2 px-4 py-2 bg-purple-600 text-white rounded-lg hover:bg-purple-700 transition-colors"
+                disabled={isDownloading}
+                className="flex items-center gap-2 px-4 py-2 bg-purple-600 text-white rounded-lg hover:bg-purple-700 disabled:bg-purple-400 disabled:cursor-not-allowed transition-colors"
               >
-                <Download size={16} />
-                {calendars.length > 1 ? 'Descargar Todo como ZIP' : 'Descargar PDF'}
+                {isDownloading ? (
+                  <>
+                    <div className="animate-spin rounded-full h-4 w-4 border-b-2 border-white"></div>
+                    Por favor espere unos segundos
+                  </>
+                ) : (
+                  <>
+                    <Download size={16} />
+                    {calendars.length > 1 ? 'Descargar Todo como ZIP' : 'Descargar PDF'}
+                  </>
+                )}
               </button>
             </div>
           </div>
