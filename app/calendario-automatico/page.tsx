@@ -1,6 +1,6 @@
 'use client';
 
-import React, { useState, useEffect, useRef } from 'react';
+import React, { useState, useEffect, useRef, useCallback } from 'react';
 import { Calendar, AlertTriangle, CheckCircle, Download, ArrowLeft, Key, Building2 } from 'lucide-react';
 import Link from 'next/link';
 import CalendarDisplay from '@/components/CalendarDisplay';
@@ -165,7 +165,7 @@ export default function AutomaticCalendarPage() {
   };
 
   // Single function to initialize everything - called only once with safeguards
-  const initializeApp = async () => {
+  const initializeApp = useCallback(async () => {
     // Prevent multiple simultaneous calls
     if (isInitializing.current || hasInitialized.current) {
       console.log('🔒 Initialization already in progress or completed, skipping...');
@@ -269,12 +269,12 @@ export default function AutomaticCalendarPage() {
       setIsLoading(false);
       isInitializing.current = false;
     }
-  };
+  }, []);
 
   // Initialize app only once when component mounts
   useEffect(() => {
     initializeApp();
-  }, []); // Empty dependency array - runs only once
+  }, [initializeApp]);
 
   // Function to manually refresh cache if needed
   const refreshCache = async () => {

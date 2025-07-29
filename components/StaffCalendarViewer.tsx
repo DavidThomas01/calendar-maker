@@ -425,7 +425,7 @@ export default function StaffCalendarViewer() {
         {!hasSearched && !isLoading && (
           <div className="text-center py-12">
             <Calendar className="h-12 w-12 text-gray-400 mx-auto mb-3" />
-            <p className="text-gray-600 text-lg">Selecciona un mes y año, y haz clic en "Ver Calendarios"</p>
+            <p className="text-gray-600 text-lg">Selecciona un mes y año, y haz clic en &quot;Ver Calendarios&quot;</p>
           </div>
         )}
       </main>

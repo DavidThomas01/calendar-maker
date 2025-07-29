@@ -1,6 +1,6 @@
 'use client';
 
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useCallback } from 'react';
 import { 
   Calculator, 
   Filter, 
@@ -165,7 +165,7 @@ export default function AccountingManager() {
   };
 
   // Calculate date range based on selected time period
-  const getDateRange = () => {
+  const getDateRange = useCallback(() => {
     const today = new Date();
     let startDate = new Date(today);
     let endDate = new Date(today);
@@ -189,7 +189,7 @@ export default function AccountingManager() {
       startDate: startDate.toISOString().split('T')[0],
       endDate: endDate.toISOString().split('T')[0]
     };
-  };
+  }, [selectedTimePeriod, customStartDate, customEndDate]);
 
   // Fetch reservations from Lodgify
   const fetchReservations = async () => {
@@ -226,7 +226,7 @@ export default function AccountingManager() {
   };
 
   // Apply property and date filters
-  const applyFilters = (reservationList: AccountingReservation[]) => {
+  const applyFilters = useCallback((reservationList: AccountingReservation[]) => {
     let filtered = [...reservationList];
     
     // Get the current date range for filtering
@@ -276,14 +276,14 @@ export default function AccountingManager() {
     }
     
     setFilteredReservations(filtered);
-  };
+  }, [getDateRange, selectedProperty, setFilteredReservations]);
 
   // Apply filters when property selection or time period changes
   useEffect(() => {
     if (reservations.length > 0) {
       applyFilters(reservations);
     }
-  }, [selectedProperty, selectedTimePeriod, customStartDate, customEndDate, reservations]);
+  }, [selectedProperty, selectedTimePeriod, customStartDate, customEndDate, reservations, applyFilters]);
 
   // Format currency
   const formatCurrency = (amount: number, currency: string = 'EUR') => {
