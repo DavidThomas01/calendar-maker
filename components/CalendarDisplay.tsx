@@ -114,8 +114,8 @@ const CalendarDisplay: React.FC<CalendarDisplayProps> = ({ calendar, onDownload 
       </div>
 
       {/* Calendar container */}
-      <div ref={calendarRef} className="print-calendar bg-white w-full max-w-none">
-                 {/* Header */}
+      <div ref={calendarRef} className="print-calendar bg-white w-full max-w-none relative">
+        {/* Header */}
         <div className="text-center mb-6 pb-4 border-b-4 border-blue-600">
           <h1 className="text-3xl font-bold text-blue-700 mb-2">
             {getApartmentNumber(calendar.apartmentName) && (
@@ -126,6 +126,36 @@ const CalendarDisplay: React.FC<CalendarDisplayProps> = ({ calendar, onDownload 
           <h2 className="text-4xl font-bold text-gray-800">
             {getMonthName(calendar.month)} {calendar.year}
           </h2>
+        </div>
+
+        {/* Legend - Top Right Corner */}
+        <div className="absolute top-4 right-4 bg-white border-2 border-gray-300 rounded-lg p-3 shadow-sm z-10" style={{ fontSize: '12px' }}>
+          <div className="text-xs font-semibold text-gray-700 mb-2 text-center">
+            Reservas: {calendar.totalBookings}
+          </div>
+          <div className="space-y-1">
+            <div className="flex items-center gap-2">
+              <div 
+                className="w-3 h-3 rounded" 
+                style={{ backgroundColor: getBookingColor('Airbnb') }}
+              ></div>
+              <span className="text-xs font-medium">Airbnb</span>
+            </div>
+            <div className="flex items-center gap-2">
+              <div 
+                className="w-3 h-3 rounded" 
+                style={{ backgroundColor: getBookingColor('VRBO') }}
+              ></div>
+              <span className="text-xs font-medium">VRBO</span>
+            </div>
+            <div className="flex items-center gap-2">
+              <div 
+                className="w-3 h-3 rounded" 
+                style={{ backgroundColor: getBookingColor('Website') }}
+              ></div>
+              <span className="text-xs font-medium">Web</span>
+            </div>
+          </div>
         </div>
 
         {/* Calendar */}
@@ -186,36 +216,6 @@ const CalendarDisplay: React.FC<CalendarDisplayProps> = ({ calendar, onDownload 
             ))}
           </tbody>
         </table>
-
-        {/* Legend */}
-        <div className="mt-6 p-4 bg-gray-50 border-2 border-gray-300">
-          <div className="text-center">
-            <div className="text-sm font-semibold text-gray-700 mb-3">Total Reservas: {calendar.totalBookings}</div>
-            <div className="flex justify-center gap-8 text-sm">
-              <div className="flex items-center gap-2">
-                <div 
-                  className="w-4 h-4 rounded" 
-                  style={{ backgroundColor: getBookingColor('Airbnb') }}
-                ></div>
-                <span className="font-medium">Airbnb</span>
-              </div>
-              <div className="flex items-center gap-2">
-                <div 
-                  className="w-4 h-4 rounded" 
-                  style={{ backgroundColor: getBookingColor('VRBO') }}
-                ></div>
-                <span className="font-medium">VRBO</span>
-              </div>
-              <div className="flex items-center gap-2">
-                <div 
-                  className="w-4 h-4 rounded" 
-                  style={{ backgroundColor: getBookingColor('Website') }}
-                ></div>
-                <span className="font-medium">Website</span>
-              </div>
-            </div>
-          </div>
-        </div>
       </div>
     </div>
   );
