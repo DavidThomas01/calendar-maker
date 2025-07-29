@@ -93,7 +93,7 @@ export default function OwnerDashboard() {
           </div>
 
           {/* Accounting Manager Card */}
-          <div className="bg-white rounded-xl shadow-lg overflow-hidden opacity-75">
+          <div className="bg-white rounded-xl shadow-lg overflow-hidden hover:shadow-xl transition-shadow">
             <div className="p-8">
               <div className="bg-green-100 rounded-full w-16 h-16 flex items-center justify-center mb-6">
                 <Calculator className="h-8 w-8 text-green-600" />
@@ -102,29 +102,29 @@ export default function OwnerDashboard() {
                 Gestor Contable
               </h3>
               <p className="text-gray-600 mb-6">
-                Administra la contabilidad y finanzas de todas tus propiedades con reportes automáticos y análisis detallados.
+                Analiza los ingresos, comisiones y precios netos de todas tus reservas con filtros por apartamento y período.
               </p>
               <div className="space-y-3 mb-8">
-                <div className="flex items-center text-sm text-gray-500">
-                  <div className="w-2 h-2 bg-gray-400 rounded-full mr-3"></div>
-                  Seguimiento de ingresos y gastos
+                <div className="flex items-center text-sm text-gray-600">
+                  <div className="w-2 h-2 bg-green-500 rounded-full mr-3"></div>
+                  Cálculo automático de comisiones (15% Airbnb/VRBO)
                 </div>
-                <div className="flex items-center text-sm text-gray-500">
-                  <div className="w-2 h-2 bg-gray-400 rounded-full mr-3"></div>
-                  Reportes fiscales automáticos
+                <div className="flex items-center text-sm text-gray-600">
+                  <div className="w-2 h-2 bg-green-500 rounded-full mr-3"></div>
+                  Filtros por apartamento y período
                 </div>
-                <div className="flex items-center text-sm text-gray-500">
-                  <div className="w-2 h-2 bg-gray-400 rounded-full mr-3"></div>
-                  Análisis de rentabilidad
+                <div className="flex items-center text-sm text-gray-600">
+                  <div className="w-2 h-2 bg-green-500 rounded-full mr-3"></div>
+                  Vista detallada de cada reserva
                 </div>
               </div>
-              <button 
-                disabled
-                className="inline-flex items-center justify-center w-full px-6 py-3 bg-gray-300 text-gray-500 font-medium rounded-lg cursor-not-allowed"
+              <Link 
+                href="/gestor-contable"
+                className="inline-flex items-center justify-center w-full px-6 py-3 bg-green-600 text-white font-medium rounded-lg hover:bg-green-700 transition-colors"
               >
                 <Calculator className="h-5 w-5 mr-2" />
-                Próximamente Disponible
-              </button>
+                Abrir Gestor Contable
+              </Link>
             </div>
           </div>
 
@@ -145,6 +145,12 @@ export default function OwnerDashboard() {
               className="inline-flex items-center px-4 py-2 text-sm bg-blue-100 text-blue-700 rounded-md hover:bg-blue-200 transition-colors"
             >
               Generar Calendarios
+            </Link>
+            <Link 
+              href="/gestor-contable"
+              className="inline-flex items-center px-4 py-2 text-sm bg-green-100 text-green-700 rounded-md hover:bg-green-200 transition-colors"
+            >
+              Ver Finanzas
             </Link>
           </div>
         </div>

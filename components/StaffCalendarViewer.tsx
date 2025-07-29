@@ -49,6 +49,7 @@ export default function StaffCalendarViewer() {
   const [error, setError] = useState('');
   const [selectedReservation, setSelectedReservation] = useState<Reservation | null>(null);
   const [showReservationModal, setShowReservationModal] = useState(false);
+  const [hasSearched, setHasSearched] = useState(false);
 
   const handleLogout = () => {
     if (confirm('¿Cerrar sesión?')) {
@@ -102,6 +103,7 @@ export default function StaffCalendarViewer() {
   const fetchCalendars = async () => {
     setIsLoading(true);
     setError('');
+    setHasSearched(true);
     
     try {
       // Calculate date range for the selected month
@@ -154,9 +156,7 @@ export default function StaffCalendarViewer() {
     }
   };
 
-  useEffect(() => {
-    fetchCalendars();
-  }, [selectedMonth, selectedYear]);
+  // Remove the useEffect that was automatically fetching data
 
   const toggleCalendar = (apartmentName: string) => {
     setOpenCalendar(openCalendar === apartmentName ? null : apartmentName);
@@ -212,50 +212,69 @@ export default function StaffCalendarViewer() {
 
       {/* Month/Year Selector */}
       <div className="bg-white border-b px-4 py-4">
-        <div className="flex space-x-3">
-          <div className="flex-1">
-            <label className="block text-sm font-medium text-gray-700 mb-2">Mes</label>
-            <select
-              value={selectedMonth}
-              onChange={(e) => setSelectedMonth(parseInt(e.target.value))}
-              className="w-full px-3 py-3 border border-gray-300 rounded-lg text-lg font-medium focus:ring-2 focus:ring-blue-500 focus:border-transparent"
-            >
-              {months.map((month, index) => (
-                <option key={index} value={index + 1}>
-                  {month}
-                </option>
-              ))}
-            </select>
+        <div className="flex flex-col space-y-4">
+          <div className="flex space-x-3">
+            <div className="flex-1">
+              <label className="block text-sm font-medium text-gray-700 mb-2">Mes</label>
+              <select
+                value={selectedMonth}
+                onChange={(e) => {
+                  setSelectedMonth(parseInt(e.target.value));
+                  setCalendars([]); // Clear previous results
+                  setHasSearched(false);
+                }}
+                className="w-full px-3 py-3 border border-gray-300 rounded-lg text-lg font-medium focus:ring-2 focus:ring-blue-500 focus:border-transparent"
+              >
+                {months.map((month, index) => (
+                  <option key={index} value={index + 1}>
+                    {month}
+                  </option>
+                ))}
+              </select>
+            </div>
+            <div className="flex-1">
+              <label className="block text-sm font-medium text-gray-700 mb-2">Año</label>
+              <select
+                value={selectedYear}
+                onChange={(e) => {
+                  setSelectedYear(parseInt(e.target.value));
+                  setCalendars([]); // Clear previous results
+                  setHasSearched(false);
+                }}
+                className="w-full px-3 py-3 border border-gray-300 rounded-lg text-lg font-medium focus:ring-2 focus:ring-blue-500 focus:border-transparent"
+              >
+                {years.map((year) => (
+                  <option key={year} value={year}>
+                    {year}
+                  </option>
+                ))}
+              </select>
+            </div>
           </div>
-          <div className="flex-1">
-            <label className="block text-sm font-medium text-gray-700 mb-2">Año</label>
-            <select
-              value={selectedYear}
-              onChange={(e) => setSelectedYear(parseInt(e.target.value))}
-              className="w-full px-3 py-3 border border-gray-300 rounded-lg text-lg font-medium focus:ring-2 focus:ring-blue-500 focus:border-transparent"
-            >
-              {years.map((year) => (
-                <option key={year} value={year}>
-                  {year}
-                </option>
-              ))}
-            </select>
-          </div>
+          
+          {/* Search Button */}
+          <button
+            onClick={fetchCalendars}
+            disabled={isLoading}
+            className="w-full py-3 px-4 bg-blue-600 text-white font-medium rounded-lg hover:bg-blue-700 transition-colors disabled:opacity-50 disabled:cursor-not-allowed flex items-center justify-center"
+          >
+            {isLoading ? (
+              <>
+                <div className="animate-spin rounded-full h-5 w-5 border-b-2 border-white mr-2"></div>
+                Cargando...
+              </>
+            ) : (
+              <>
+                <Calendar className="h-5 w-5 mr-2" />
+                Ver Calendarios
+              </>
+            )}
+          </button>
         </div>
       </div>
 
       {/* Main Content */}
       <main className="px-4 py-4">
-        {/* Loading State */}
-        {isLoading && (
-          <div className="flex items-center justify-center py-12">
-            <div className="text-center">
-              <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-blue-600 mx-auto mb-3"></div>
-              <p className="text-gray-600">Cargando calendarios...</p>
-            </div>
-          </div>
-        )}
-
         {/* Error State */}
         {error && (
           <div className="bg-red-50 border border-red-200 rounded-lg p-4 mb-4">
@@ -270,7 +289,7 @@ export default function StaffCalendarViewer() {
         )}
 
         {/* Calendar List */}
-        {!isLoading && !error && (
+        {hasSearched && !isLoading && !error && (
           <>
             {/* Summary */}
             <div className="mb-4 text-center">
@@ -401,6 +420,13 @@ export default function StaffCalendarViewer() {
               </div>
             )}
           </>
+        )}
+
+        {!hasSearched && !isLoading && (
+          <div className="text-center py-12">
+            <Calendar className="h-12 w-12 text-gray-400 mx-auto mb-3" />
+            <p className="text-gray-600 text-lg">Selecciona un mes y año, y haz clic en "Ver Calendarios"</p>
+          </div>
         )}
       </main>
 
