@@ -62,18 +62,18 @@ interface AccountingReservation {
   people: number;
 }
 
-// Property mapping
+// Property mapping (CORRECTED to match CSV data and admin calendar)
 const PROPERTY_NAMES = new Map([
-  [685237, 'At Home in Madrid I'],
-  [685238, 'At Home in Madrid II'],
-  [685239, 'At Home in Madrid III'],
-  [685240, 'At Home in Madrid IV'],
-  [685241, 'At Home in Madrid V'],
-  [685242, 'At Home in Madrid VI'],
-  [685243, 'At Home in Madrid VII'],
-  [685244, 'At Home in Madrid VIII'],
-  [685245, 'At Home in Madrid IX'],
-  [685246, 'At Home in Madrid X']
+  [685237, 'At Home in Madrid IX, Trendy Chueca, Prado, GranVia'],
+  [685238, 'At Home in Madrid X, Center, Prado, Barrio Letras'],
+  [685239, 'At Home in Madrid VIII, Centro, Prado, Letras'],
+  [685240, 'At Home in Madrid VII, Trendy Neighborhood'],
+  [685241, 'At Home in Madrid VI, Centro, Prado, Barrio Letras'],
+  [685242, 'At Home in Madrid II, Centro, Prado, Barrio Letras'],
+  [685243, 'At Home in Madrid I, Centro de Madrid'],
+  [685244, 'At Home in Madrid III, Centro, Prado, BarrioLetras'],
+  [685245, 'At Home in Madrid IV, Centro, Prado, Barrio Letras'],
+  [685246, 'At Home in Madrid V, Centro, Prado, Barrio Letras']
 ]);
 
 // Time period options

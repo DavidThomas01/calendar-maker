@@ -2,6 +2,13 @@
 @tailwind components;
 @tailwind utilities;
 
+/* Print styles for PDF export */
+@media print {
+  .no-print {
+    display: none !important;
+  }
+}
+
 /* Print styles for A4 calendar */
 @media print {
   .print-calendar {

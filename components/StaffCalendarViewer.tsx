@@ -1,10 +1,11 @@
 'use client';
 
 import React, { useState, useEffect } from 'react';
-import { Calendar, ChevronDown, ChevronRight, LogOut, Users, Home, X, User, Mail, Clock } from 'lucide-react';
+import { Calendar, ChevronDown, ChevronRight, LogOut, Users, Home, X, User, Mail, Clock, MessageSquare } from 'lucide-react';
 import { useAuth } from '@/components/AuthProvider';
-import { Reservation, ApartmentCalendar } from '@/lib/types';
+import { Reservation, ApartmentCalendar, DayComment } from '@/lib/types';
 import { parseCSVToReservations, filterReservationsForMonth, generateApartmentCalendar, groupReservationsByApartment, getMonthName, generateCleanDisplayName, getBookingColor } from '@/lib/calendar-utils';
+import DayComments from './DayComments';
 
 // Lodgify API response interface
 interface LodgifyReservation {
@@ -25,18 +26,18 @@ interface LodgifyReservation {
   people_count?: number;
 }
 
-// Property mapping (same as in calendario-automatico)
+// Property mapping (CORRECTED to match calendario-automatico and CSV data)
 const PROPERTY_NAMES = new Map([
-  [685237, 'At Home in Madrid I'],
-  [685238, 'At Home in Madrid II'],
-  [685239, 'At Home in Madrid III'],
-  [685240, 'At Home in Madrid IV'],
-  [685241, 'At Home in Madrid V'],
-  [685242, 'At Home in Madrid VI'],
-  [685243, 'At Home in Madrid VII'],
-  [685244, 'At Home in Madrid VIII'],
-  [685245, 'At Home in Madrid IX'],
-  [685246, 'At Home in Madrid X']
+  [685237, 'At Home in Madrid IX, Trendy Chueca, Prado, GranVia'],
+  [685238, 'At Home in Madrid X, Center, Prado, Barrio Letras'],
+  [685239, 'At Home in Madrid VIII, Centro, Prado, Letras'],
+  [685240, 'At Home in Madrid VII, Trendy Neighborhood'],
+  [685241, 'At Home in Madrid VI, Centro, Prado, Barrio Letras'],
+  [685242, 'At Home in Madrid II, Centro, Prado, Barrio Letras'],
+  [685243, 'At Home in Madrid I, Centro de Madrid'],
+  [685244, 'At Home in Madrid III, Centro, Prado, BarrioLetras'],
+  [685245, 'At Home in Madrid IV, Centro, Prado, Barrio Letras'],
+  [685246, 'At Home in Madrid V, Centro, Prado, Barrio Letras']
 ]);
 
 export default function StaffCalendarViewer() {
@@ -135,18 +136,18 @@ export default function StaffCalendarViewer() {
       // Group by apartment (using existing utility)
       const apartmentGroups = groupReservationsByApartment(monthReservations);
       
-      // Generate calendars for each apartment (using existing utility)
+      // Generate calendars for each apartment (using existing utility) - now with comments loaded
       const apartmentCalendars: ApartmentCalendar[] = [];
-      apartmentGroups.forEach((reservations, apartmentName) => {
-        const calendar = generateApartmentCalendar(apartmentName, reservations, selectedYear, selectedMonth);
+      for (const [apartmentName, reservations] of apartmentGroups) {
+        const calendar = await generateApartmentCalendar(apartmentName, reservations, selectedYear, selectedMonth);
         apartmentCalendars.push(calendar);
-      });
+      }
       
       // Sort calendars by apartment name for consistency
       apartmentCalendars.sort((a, b) => a.apartmentName.localeCompare(b.apartmentName));
       
       setCalendars(apartmentCalendars);
-      console.log(`✅ Staff Calendar: Generated ${apartmentCalendars.length} calendars`);
+      console.log(`✅ Staff Calendar: Generated ${apartmentCalendars.length} calendars with comments`);
       
     } catch (err) {
       console.error('Error:', err);
@@ -154,6 +155,18 @@ export default function StaffCalendarViewer() {
     } finally {
       setIsLoading(false);
     }
+  };
+
+  // Handle comment updates (for staff this is read-only, but needed for component interface)
+  const handleCommentsUpdate = () => {
+    // No-op for staff - they can't edit comments
+  };
+
+  // Check if a day has any comments
+  const dayHasComments = (day: any): boolean => {
+    return day.reservations.some((resInfo: any) => {
+      return resInfo.comments && resInfo.comments.length > 0;
+    });
   };
 
   // Remove the useEffect that was automatically fetching data
@@ -348,14 +361,19 @@ export default function StaffCalendarViewer() {
                         {/* Calendar weeks */}
                         {calendar.weeks.map((week, weekIndex) => (
                           <div key={weekIndex} className="grid grid-cols-7 gap-1">
-                            {week.days.map((day, dayIndex) => (
+                            {week.days.map((day, dayIndex) => {
+                              const hasComments = dayHasComments(day);
+                              
+                              return (
                               <div
                                 key={dayIndex}
                                 className={`
-                                  min-h-[60px] p-1 border rounded text-xs
-                                  ${day.isCurrentMonth 
-                                    ? 'bg-white border-gray-200' 
-                                    : 'bg-gray-50 border-gray-100 text-gray-400'
+                                  min-h-[100px] p-1 border rounded text-xs group
+                                  ${hasComments 
+                                    ? 'bg-blue-50 border-blue-200' 
+                                    : day.isCurrentMonth 
+                                      ? 'bg-white border-gray-200' 
+                                      : 'bg-gray-50 border-gray-100 text-gray-400'
                                   }
                                 `}
                               >
@@ -364,7 +382,7 @@ export default function StaffCalendarViewer() {
                                 </div>
                                 
                                 {/* Reservations */}
-                                <div className="space-y-1">
+                                <div className="space-y-1 mb-2">
                                   {day.reservations.map((resInfo, index) => (
                                     <button
                                       key={index}
@@ -384,8 +402,11 @@ export default function StaffCalendarViewer() {
                                     </button>
                                   ))}
                                 </div>
+
+                                {/* Comments Section - Removed for simplified calendar to avoid clutter */}
                               </div>
-                            ))}
+                            );
+                            })}
                           </div>
                         ))}
                       </div>
@@ -520,6 +541,49 @@ export default function StaffCalendarViewer() {
                   {selectedReservation.Status}
                 </span>
               </div>
+
+              {/* Comments Section */}
+              {(() => {
+                // Find comments for this reservation from the calendar data (deduplicated)
+                const commentsMap = new Map<string, DayComment>();
+                calendars.forEach(calendar => {
+                  calendar.weeks.forEach(week => {
+                    week.days.forEach(day => {
+                      day.reservations.forEach(resInfo => {
+                        if (resInfo.reservation.Id === selectedReservation.Id && resInfo.comments) {
+                          resInfo.comments.forEach(comment => {
+                            // Use comment ID as key to avoid duplicates
+                            commentsMap.set(comment.id, comment);
+                          });
+                        }
+                      });
+                    });
+                  });
+                });
+                const reservationComments = Array.from(commentsMap.values());
+
+                if (reservationComments.length > 0) {
+                  return (
+                    <div className="bg-blue-50 rounded-lg p-3">
+                      <div className="flex items-center mb-2">
+                        <MessageSquare className="h-4 w-4 text-blue-600 mr-2" />
+                        <span className="font-medium text-blue-900">Comentarios</span>
+                      </div>
+                      <div className="space-y-2">
+                        {reservationComments.map((comment) => (
+                          <div key={comment.id} className="text-sm text-gray-700 bg-white p-2 rounded border">
+                            <div className="font-medium text-xs text-gray-500 mb-1">
+                              {new Date(comment.date).toLocaleDateString('es-ES')} - {comment.createdBy === 'owner' ? 'Propietario' : 'Staff'}
+                            </div>
+                            {comment.text}
+                          </div>
+                        ))}
+                      </div>
+                    </div>
+                  );
+                }
+                return null;
+              })()}
             </div>
 
             {/* Modal Footer */}

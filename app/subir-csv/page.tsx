@@ -86,7 +86,7 @@ export default function CSVUploadPage() {
         // Generate for specific apartment
         const apartmentReservations = apartmentGroups.get(selectedApartment);
         if (apartmentReservations) {
-          const calendar = generateApartmentCalendar(
+          const calendar = await generateApartmentCalendar(
             selectedApartment,
             apartmentReservations,
             selectedYear,
@@ -97,7 +97,7 @@ export default function CSVUploadPage() {
       } else {
         // Generate for all apartments
         for (const [apartmentName, apartmentReservations] of apartmentGroups) {
-          const calendar = generateApartmentCalendar(
+          const calendar = await generateApartmentCalendar(
             apartmentName,
             apartmentReservations,
             selectedYear,

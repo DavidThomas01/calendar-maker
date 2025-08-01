@@ -1,4 +1,4 @@
-import { Reservation, CalendarDay, CalendarWeek, ApartmentCalendar, ReservationInfo } from './types';
+import { Reservation, CalendarDay, CalendarWeek, ApartmentCalendar, ReservationInfo, DayComment } from './types';
 
 // Extract apartment number from property name (converts Roman numerals to apartment codes)
 export function getApartmentNumber(propertyName: string): string {
@@ -146,12 +146,24 @@ export function groupDatesByWeek(dates: Date[]): Date[][] {
   return weeks;
 }
 
-export function createReservationLookup(reservations: Reservation[]): Map<string, ReservationInfo[]> {
+export function createReservationLookup(reservations: Reservation[], comments?: DayComment[]): Map<string, ReservationInfo[]> {
   const lookup = new Map<string, ReservationInfo[]>();
+  
+  // Create a map of comments by booking ID for quick lookup
+  const commentsByBookingId = new Map<string, DayComment[]>();
+  if (comments) {
+    comments.forEach(comment => {
+      if (!commentsByBookingId.has(comment.bookingId)) {
+        commentsByBookingId.set(comment.bookingId, []);
+      }
+      commentsByBookingId.get(comment.bookingId)!.push(comment);
+    });
+  }
   
   reservations.forEach(reservation => {
     const arrivalDate = new Date(reservation.DateArrival);
     const departureDate = new Date(reservation.DateDeparture);
+    const reservationComments = commentsByBookingId.get(reservation.Id) || [];
     
     // Handle the stay period (arrival date to day before departure)
     const currentDate = new Date(arrivalDate);
@@ -167,7 +179,8 @@ export function createReservationLookup(reservations: Reservation[]): Map<string
       lookup.get(dateKey)!.push({
         reservation,
         isCheckin,
-        isCheckout
+        isCheckout,
+        comments: reservationComments
       });
       
       currentDate.setDate(currentDate.getDate() + 1);
@@ -182,27 +195,74 @@ export function createReservationLookup(reservations: Reservation[]): Map<string
     lookup.get(departureDateKey)!.push({
       reservation,
       isCheckin: false,
-      isCheckout: true
+      isCheckout: true,
+      comments: reservationComments
     });
   });
   
   return lookup;
 }
 
-export function generateApartmentCalendar(
+// Fetch comments for specific booking IDs
+export async function fetchCommentsForBookings(bookingIds: string[]): Promise<DayComment[]> {
+  try {
+    if (bookingIds.length === 0) {
+      return [];
+    }
+    
+    const response = await fetch(
+      `/api/comments?bookingIds=${bookingIds.join(',')}`
+    );
+    
+    if (!response.ok) {
+      throw new Error('Failed to fetch comments');
+    }
+    
+    const data = await response.json();
+    return data.comments || [];
+  } catch (error) {
+    console.error('Error fetching comments for bookings:', error);
+    return [];
+  }
+}
+
+// Create a comment lookup map by date
+export function createCommentLookup(comments: DayComment[]): Map<string, DayComment[]> {
+  const lookup = new Map<string, DayComment[]>();
+  
+  comments.forEach(comment => {
+    const date = new Date(comment.date);
+    const dateKey = date.toDateString();
+    
+    if (!lookup.has(dateKey)) {
+      lookup.set(dateKey, []);
+    }
+    lookup.get(dateKey)!.push(comment);
+  });
+  
+  return lookup;
+}
+
+export async function generateApartmentCalendar(
   apartmentName: string,
   reservations: Reservation[],
   year: number,
   month: number
-): ApartmentCalendar {
+): Promise<ApartmentCalendar> {
   // Get all calendar dates
   const calendarDates = getCalendarDates(year, month);
   
   // Group dates by week
   const dateWeeks = groupDatesByWeek(calendarDates);
   
-  // Create reservation lookup
-  const reservationLookup = createReservationLookup(reservations);
+  // Extract all booking IDs from reservations
+  const bookingIds = reservations.map(r => r.Id);
+  
+  // Fetch comments for all these bookings
+  const comments = await fetchCommentsForBookings(bookingIds);
+  
+  // Create reservation lookup with comments attached
+  const reservationLookup = createReservationLookup(reservations, comments);
   
   // Count reservations for this month
   const monthReservations = reservations.filter(r => 
@@ -352,11 +412,22 @@ export function getBookingColor(source: string, reservationId?: string): string 
   return hslToHex(h, newS, newL);
 }
 
+// Normalize apartment name to standard format for consistent grouping
+export function normalizeApartmentName(houseName: string): string {
+  // Extract Roman numeral from any apartment name format
+  const romanNumeral = extractRomanNumeral(houseName);
+  if (romanNumeral) {
+    return `At Home in Madrid ${romanNumeral}`;
+  }
+  return houseName; // fallback to original if no Roman numeral found
+}
+
 export function groupReservationsByApartment(reservations: Reservation[]): Map<string, Reservation[]> {
   const apartmentGroups = new Map<string, Reservation[]>();
   
   reservations.forEach(reservation => {
-    const apartmentName = reservation.HouseName;
+    // Use normalized apartment name for consistent grouping
+    const apartmentName = normalizeApartmentName(reservation.HouseName);
     if (!apartmentGroups.has(apartmentName)) {
       apartmentGroups.set(apartmentName, []);
     }

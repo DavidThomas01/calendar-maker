@@ -461,7 +461,7 @@ export default function AutomaticCalendarPage() {
       // Generate calendar for each selected property
       for (const propertyName of selectedPropertyNames) {
         const reservations = groupedReservations.get(propertyName) || []; // Empty array if no reservations
-        const calendar = generateApartmentCalendar(
+        const calendar = await generateApartmentCalendar(
           propertyName,
           reservations,
           selectedYear,
