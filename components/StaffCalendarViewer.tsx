@@ -6,6 +6,7 @@ import { useAuth } from '@/components/AuthProvider';
 import { Reservation, ApartmentCalendar, DayComment } from '@/lib/types';
 import { parseCSVToReservations, filterReservationsForMonth, generateApartmentCalendar, groupReservationsByApartment, getMonthName, generateCleanDisplayName, getBookingColor } from '@/lib/calendar-utils';
 import DayComments from './DayComments';
+import GeneralDayComments from './GeneralDayComments';
 
 // Lodgify API response interface
 interface LodgifyReservation {
@@ -51,6 +52,9 @@ export default function StaffCalendarViewer() {
   const [selectedReservation, setSelectedReservation] = useState<Reservation | null>(null);
   const [showReservationModal, setShowReservationModal] = useState(false);
   const [hasSearched, setHasSearched] = useState(false);
+  const [selectedGeneralComment, setSelectedGeneralComment] = useState<{date: Date, comment: string} | null>(null);
+  const [dayComments, setDayComments] = useState<Map<string, DayComment[]>>(new Map());
+  const [showCommentsDropdown, setShowCommentsDropdown] = useState<string | null>(null);
 
   const handleLogout = () => {
     if (confirm('¿Cerrar sesión?')) {
@@ -144,6 +148,8 @@ export default function StaffCalendarViewer() {
       const apartmentCalendars: ApartmentCalendar[] = [];
       for (const [apartmentName, reservations] of apartmentGroups) {
         const calendar = await generateApartmentCalendar(apartmentName, reservations, selectedYear, selectedMonth);
+        
+
         apartmentCalendars.push(calendar);
       }
       
@@ -153,6 +159,10 @@ export default function StaffCalendarViewer() {
       setCalendars(apartmentCalendars);
       console.log(`✅ Staff Calendar: Generated ${apartmentCalendars.length} calendars with comments`);
       
+      // Fetch general comments for all apartments in this month (same as detailed calendar)
+      await fetchAllDayComments(selectedYear, selectedMonth);
+      console.log(`✅ Staff Calendar: Fetched general comments for ${getMonthName(selectedMonth)} ${selectedYear}`);
+      
     } catch (err) {
       console.error('Error:', err);
       setError('No se pudieron cargar los calendarios. Intenta de nuevo.');
@@ -161,38 +171,13 @@ export default function StaffCalendarViewer() {
     }
   };
 
-  // Handle comment updates (for staff this is read-only, but needed for component interface)
-  const handleCommentsUpdate = () => {
-    // No-op for staff - they can't edit comments
-  };
 
-  // Generate day booking ID for day-level comments
-  const generateDayBookingId = (date: Date, apartmentName: string): string => {
-    // Use local date formatting to avoid timezone issues
-    const year = date.getFullYear();
-    const month = String(date.getMonth() + 1).padStart(2, '0');
-    const day = String(date.getDate()).padStart(2, '0');
-    const dateStr = `${year}-${month}-${day}`;
-    return `DAY_${dateStr}_${apartmentName.replace(/\s+/g, '_')}`;
-  };
 
   // Check if a day has reservation comments
   const dayHasReservationComments = (day: any): boolean => {
     return day.reservations.some((resInfo: any) => {
       return resInfo.comments && resInfo.comments.length > 0;
     });
-  };
-
-  // Check if a day has general day comments (yellow comments)
-  const dayHasGeneralComments = (day: any): boolean => {
-    // Check if there are any general day comments for this day
-    // This is now populated by the calendar generation process
-    return day.generalComments && day.generalComments.length > 0;
-  };
-
-  // Check if a day has any comments (reservation or general)
-  const dayHasComments = (day: any): boolean => {
-    return dayHasReservationComments(day) || dayHasGeneralComments(day);
   };
 
   // Remove the useEffect that was automatically fetching data
@@ -209,6 +194,142 @@ export default function StaffCalendarViewer() {
   const closeReservationModal = () => {
     setShowReservationModal(false);
     setSelectedReservation(null);
+  };
+
+
+
+  const closeGeneralCommentModal = () => {
+    setSelectedGeneralComment(null);
+  };
+
+  // Fetch day comments exactly like detailed calendar
+  const fetchAllDayComments = async (year: number, month: number) => {
+    try {
+      const monthStart = new Date(year, month - 1, 1);
+      const monthEnd = new Date(year, month, 0);
+      
+      // Generate all possible day booking IDs for this month and all apartments
+      const dayBookingIds: string[] = [];
+      const apartmentNames = Array.from(PROPERTY_NAMES.values());
+      
+      apartmentNames.forEach(apartmentName => {
+        const currentDate = new Date(monthStart);
+        while (currentDate <= monthEnd) {
+          const dayBookingId = generateDayBookingId(currentDate, apartmentName);
+          dayBookingIds.push(dayBookingId);
+          currentDate.setDate(currentDate.getDate() + 1);
+        }
+      });
+      
+      console.log(`🔍 Fetching general comments for ${dayBookingIds.length} day combinations`);
+      
+      // Break into smaller chunks to avoid URL length limit (431 error)
+      const chunkSize = 50;
+      const allComments: any[] = [];
+      
+      for (let i = 0; i < dayBookingIds.length; i += chunkSize) {
+        const chunk = dayBookingIds.slice(i, i + chunkSize);
+        console.log(`📡 Fetching chunk ${Math.floor(i/chunkSize) + 1}/${Math.ceil(dayBookingIds.length/chunkSize)} (${chunk.length} IDs)`);
+        
+        try {
+          const response = await fetch(`/api/comments?bookingIds=${chunk.join('|')}`);
+          if (!response.ok) {
+            console.warn(`⚠️ Failed to fetch chunk ${Math.floor(i/chunkSize) + 1}: ${response.status}`);
+            continue;
+          }
+          
+          const data = await response.json();
+          const comments = data.comments || [];
+          allComments.push(...comments);
+          console.log(`✅ Chunk ${Math.floor(i/chunkSize) + 1}: Found ${comments.length} comments`);
+          
+          // Small delay to avoid overwhelming the server
+          await new Promise(resolve => setTimeout(resolve, 100));
+        } catch (chunkError) {
+          console.warn(`⚠️ Error fetching chunk ${Math.floor(i/chunkSize) + 1}:`, chunkError);
+        }
+      }
+      
+      console.log(`📝 Total found ${allComments.length} general comments for the month`);
+      
+      // Create a map exactly like detailed calendar: bookingId -> DayComment[]
+      const commentsMap = new Map<string, DayComment[]>();
+      allComments.forEach((comment: any) => {
+        if (comment.bookingId.startsWith('DAY_')) {
+          const existingComments = commentsMap.get(comment.bookingId) || [];
+          existingComments.push(comment);
+          commentsMap.set(comment.bookingId, existingComments);
+          console.log(`🟨 General comment: ${comment.date} for booking ${comment.bookingId} = "${comment.text}"`);
+        }
+      });
+      
+      setDayComments(commentsMap);
+      console.log(`🗺️ DayComments Map has ${commentsMap.size} entries total`);
+      
+    } catch (error) {
+      console.error('Error fetching general comments:', error);
+    }
+  };
+
+  // Generate day booking ID for day-level comments (same as detailed calendar)
+  const generateDayBookingId = (date: Date, apartmentName: string): string => {
+    // Use local date formatting to avoid timezone issues
+    const year = date.getFullYear();
+    const month = String(date.getMonth() + 1).padStart(2, '0');
+    const day = String(date.getDate()).padStart(2, '0');
+    const dateStr = `${year}-${month}-${day}`;
+    return `DAY_${dateStr}_${apartmentName.replace(/\s+/g, '_')}`;
+  };
+
+  // Get day-level comments for a specific day (same as detailed calendar)
+  const getDayLevelComments = (day: any, apartmentName: string): DayComment[] => {
+    const dayBookingId = generateDayBookingId(day.date, apartmentName);
+    return dayComments.get(dayBookingId) || [];
+  };
+
+  // Check specifically for general day comments (yellow comments) (same as detailed calendar)
+  const dayHasGeneralComments = (day: any, apartmentName: string): boolean => {
+    return getDayLevelComments(day, apartmentName).length > 0;
+  };
+
+  // Handle comment updates (read-only for staff)
+  const handleCommentsUpdate = () => {
+    // Staff can't edit comments - read only
+  };
+
+  // Get all yellow comments for a specific property in the current month
+  const getPropertyMonthComments = (apartmentName: string): {date: Date, comment: string}[] => {
+    const comments: {date: Date, comment: string}[] = [];
+    
+    // Iterate through all day comments to find ones for this apartment
+    dayComments.forEach((commentArray, bookingId) => {
+      if (bookingId.startsWith('DAY_') && bookingId.includes(apartmentName.replace(/\s+/g, '_'))) {
+        // Extract date from booking ID: DAY_YYYY-MM-DD_apartment_name
+        const datePart = bookingId.split('_')[1]; // Gets "YYYY-MM-DD"
+        if (datePart) {
+          const [year, month, day] = datePart.split('-');
+          const commentDate = new Date(parseInt(year), parseInt(month) - 1, parseInt(day));
+          
+          // Check if this date is in the selected month/year
+          if (commentDate.getMonth() === selectedMonth - 1 && commentDate.getFullYear() === selectedYear) {
+            commentArray.forEach(comment => {
+              comments.push({
+                date: commentDate,
+                comment: comment.text
+              });
+            });
+          }
+        }
+      }
+    });
+    
+    // Sort comments by date
+    return comments.sort((a, b) => a.date.getTime() - b.date.getTime());
+  };
+
+  // Toggle comments dropdown for a specific property
+  const toggleCommentsDropdown = (apartmentName: string) => {
+    setShowCommentsDropdown(showCommentsDropdown === apartmentName ? null : apartmentName);
   };
 
   const formatDate = (date: Date) => {
@@ -348,27 +469,33 @@ export default function StaffCalendarViewer() {
                   className="bg-white rounded-lg shadow-sm border overflow-hidden"
                 >
                   {/* Apartment Header - Clickable */}
-                  <button
-                    onClick={() => toggleCalendar(calendar.apartmentName)}
-                    className="w-full px-4 py-4 flex items-center justify-between bg-gray-50 hover:bg-gray-100 transition-colors"
-                  >
-                    <div className="flex items-center">
-                      <Home className="h-5 w-5 text-blue-600 mr-3" />
-                      <div className="text-left">
-                        <h3 className="font-semibold text-gray-900 text-base">
-                          {generateCleanDisplayName(calendar.apartmentName)}
-                        </h3>
-                        <p className="text-sm text-gray-600">
-                          {calendar.totalBookings} {calendar.totalBookings === 1 ? 'reserva' : 'reservas'}
-                        </p>
+                  <div className="bg-gray-50">
+                    <button
+                      onClick={() => toggleCalendar(calendar.apartmentName)}
+                      className="w-full px-4 py-4 flex items-center justify-between hover:bg-gray-100 transition-colors"
+                    >
+                      <div className="flex items-center">
+                        <Home className="h-5 w-5 text-blue-600 mr-3" />
+                        <div className="text-left">
+                          <h3 className="font-semibold text-gray-900 text-base">
+                            {generateCleanDisplayName(calendar.apartmentName)}
+                          </h3>
+                          <p className="text-sm text-gray-600">
+                            {calendar.totalBookings} {calendar.totalBookings === 1 ? 'reserva' : 'reservas'}
+                          </p>
+                        </div>
                       </div>
-                    </div>
-                    {openCalendar === calendar.apartmentName ? (
-                      <ChevronDown className="h-5 w-5 text-gray-400" />
-                    ) : (
-                      <ChevronRight className="h-5 w-5 text-gray-400" />
-                    )}
-                  </button>
+                      <div className="flex items-center gap-2">
+                        {openCalendar === calendar.apartmentName ? (
+                          <ChevronDown className="h-5 w-5 text-gray-400" />
+                        ) : (
+                          <ChevronRight className="h-5 w-5 text-gray-400" />
+                        )}
+                      </div>
+                    </button>
+
+
+                  </div>
 
                   {/* Calendar Content - Collapsible */}
                   {openCalendar === calendar.apartmentName && (
@@ -384,22 +511,82 @@ export default function StaffCalendarViewer() {
                           ))}
                         </div>
 
+                        {/* Comments Summary Button - Below Legend */}
+                        <div className="mb-3 flex justify-center">
+                          <button
+                            onClick={() => toggleCommentsDropdown(calendar.apartmentName)}
+                            className="bg-yellow-500 hover:bg-yellow-600 text-white px-4 py-2 rounded-lg text-sm flex items-center gap-2 transition-colors shadow-sm"
+                            title="Ver todos los comentarios generales"
+                          >
+                            <MessageSquare size={16} />
+                            Ver Comentarios Generales
+                          </button>
+                        </div>
+
+                        {/* Comments Dropdown - Below Button */}
+                        {showCommentsDropdown === calendar.apartmentName && (
+                          <div className="mb-4 bg-yellow-50 border border-yellow-200 rounded-lg p-4">
+                            <h4 className="text-lg font-semibold text-yellow-800 mb-3 flex items-center gap-2">
+                              <MessageSquare size={18} />
+                              Comentarios Generales - {getMonthName(selectedMonth)} {selectedYear}
+                            </h4>
+                            {(() => {
+                              const propertyComments = getPropertyMonthComments(calendar.apartmentName);
+                              
+                              if (propertyComments.length === 0) {
+                                return (
+                                  <div className="text-yellow-700 italic text-center py-2">
+                                    No hay comentarios generales para este mes.
+                                  </div>
+                                );
+                              }
+                              
+                              return (
+                                <div className="space-y-3 max-h-64 overflow-y-auto">
+                                  {propertyComments.map((item, index) => (
+                                    <div 
+                                      key={index} 
+                                      className="bg-white rounded-lg p-3 border border-yellow-200 shadow-sm"
+                                    >
+                                      <div className="flex items-start justify-between gap-3">
+                                        <div className="flex-1">
+                                          <div className="font-medium text-yellow-800 mb-1">
+                                            📅 {item.date.toLocaleDateString('es-ES', { 
+                                              weekday: 'long', 
+                                              day: 'numeric', 
+                                              month: 'long' 
+                                            })}
+                                          </div>
+                                          <div className="text-gray-700 text-sm leading-relaxed">
+                                            💬 {item.comment}
+                                          </div>
+                                        </div>
+                                        <div className="text-xs text-yellow-600 bg-yellow-100 px-2 py-1 rounded">
+                                          Día {item.date.getDate()}
+                                        </div>
+                                      </div>
+                                    </div>
+                                  ))}
+                                </div>
+                              );
+                            })()}
+                          </div>
+                        )}
+
                         {/* Calendar weeks */}
                         {calendar.weeks.map((week, weekIndex) => (
                           <div key={weekIndex} className="grid grid-cols-7 gap-1">
                             {week.days.map((day, dayIndex) => {
-                              const hasReservationComments = dayHasReservationComments(day);
-                              const hasGeneralComments = dayHasGeneralComments(day);
-                              const hasAnyComments = hasReservationComments || hasGeneralComments;
+                              const hasGeneralComments = dayHasGeneralComments(day, calendar.apartmentName);
                               
                               return (
                               <div
                                 key={dayIndex}
                                 className={`
-                                  min-h-[100px] p-1 border rounded text-xs group
+                                  day-cell min-h-[100px] p-1 border rounded text-xs group relative
                                   ${hasGeneralComments 
-                                    ? 'bg-yellow-50 border-yellow-400 ring-2 ring-yellow-400 ring-inset' 
-                                    : hasReservationComments 
+                                    ? 'ring-4 ring-yellow-400 ring-inset bg-yellow-50' 
+                                    : dayHasReservationComments(day) 
                                       ? 'bg-blue-50 border-blue-200' 
                                       : day.isCurrentMonth 
                                         ? 'bg-white border-gray-200' 
@@ -416,7 +603,10 @@ export default function StaffCalendarViewer() {
                                   {day.reservations.map((resInfo, index) => (
                                     <button
                                       key={index}
-                                      onClick={() => handleReservationClick(resInfo.reservation)}
+                                      onClick={(e) => {
+                                        e.stopPropagation(); // Prevent day click
+                                        handleReservationClick(resInfo.reservation);
+                                      }}
                                       className="w-full text-xs px-1 py-0.5 rounded text-white overflow-hidden hover:opacity-80 transition-opacity"
                                       style={{ 
                                         backgroundColor: getBookingColor(resInfo.reservation.Source, resInfo.reservation.Id.toString())
@@ -433,7 +623,17 @@ export default function StaffCalendarViewer() {
                                   ))}
                                 </div>
 
-                                {/* Comments Section - Removed for simplified calendar to avoid clutter */}
+                                {/* Day-Level Comments - Same as detailed calendar */}
+                                <div className="mt-1">
+                                  <GeneralDayComments
+                                    key={`day-${day.date.toDateString()}`}
+                                    date={day.date}
+                                    apartmentName={calendar.apartmentName}
+                                    comments={getDayLevelComments(day, calendar.apartmentName)}
+                                    isOwner={false}
+                                    onCommentsUpdate={handleCommentsUpdate}
+                                  />
+                                </div>
                               </div>
                             );
                             })}
@@ -624,6 +824,42 @@ export default function StaffCalendarViewer() {
               >
                 Cerrar
               </button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* General Comment Modal */}
+      {selectedGeneralComment && (
+        <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center p-4 z-50">
+          <div className="bg-white rounded-lg shadow-xl max-w-md w-full">
+            <div className="p-6">
+              <div className="flex justify-between items-start mb-4">
+                <h3 className="text-lg font-bold text-yellow-700 flex items-center">
+                  <span className="inline-block w-3 h-3 bg-yellow-400 rounded-full mr-2"></span>
+                  Comentario General del Día
+                </h3>
+                <button
+                  onClick={closeGeneralCommentModal}
+                  className="text-gray-400 hover:text-gray-600"
+                >
+                  <X className="h-6 w-6" />
+                </button>
+              </div>
+              
+              <div className="space-y-3">
+                <div className="flex items-center">
+                  <Calendar className="h-4 w-4 text-gray-400 mr-2" />
+                  <span className="text-sm font-medium text-gray-700">Fecha:</span>
+                  <span className="ml-2 text-sm text-gray-900">{formatDate(selectedGeneralComment.date)}</span>
+                </div>
+                
+                <div className="mt-4">
+                  <div className="text-sm text-gray-700 bg-yellow-50 border-l-4 border-yellow-400 p-3 rounded">
+                    {selectedGeneralComment.comment}
+                  </div>
+                </div>
+              </div>
             </div>
           </div>
         </div>
