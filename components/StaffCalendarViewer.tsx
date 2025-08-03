@@ -107,13 +107,17 @@ export default function StaffCalendarViewer() {
     setHasSearched(true);
     
     try {
-      // Calculate date range for the selected month
-      const startDate = `${selectedYear}-${selectedMonth.toString().padStart(2, '0')}-01`;
-      const endDate = new Date(selectedYear, selectedMonth, 0).toISOString().split('T')[0];
+      // Calculate expanded date range to capture reservations that span multiple months
+      // Query from 2 months before to 2 months after to ensure we don't miss any overlapping reservations
+      const queryStartDate = new Date(selectedYear, selectedMonth - 3, 1); // 2 months before + current month start
+      const queryEndDate = new Date(selectedYear, selectedMonth + 1, 0); // 1 month after current month end
       
-      console.log(`📅 Staff Calendar: Fetching reservations for ${getMonthName(selectedMonth)} ${selectedYear}`);
+      const startDate = queryStartDate.toISOString().split('T')[0];
+      const endDate = queryEndDate.toISOString().split('T')[0];
       
-      // Fetch data from Lodgify API (same endpoint as calendario-automatico)
+      console.log(`📅 Staff Calendar: Fetching reservations for ${getMonthName(selectedMonth)} ${selectedYear} (expanded range: ${startDate} to ${endDate})`);
+      
+      // Fetch data from Lodgify API with expanded date range
       const response = await fetch(`/api/lodgify/reservations?startDate=${startDate}&endDate=${endDate}`);
       if (!response.ok) {
         throw new Error('Error al obtener las reservas');
@@ -162,11 +166,33 @@ export default function StaffCalendarViewer() {
     // No-op for staff - they can't edit comments
   };
 
-  // Check if a day has any comments
-  const dayHasComments = (day: any): boolean => {
+  // Generate day booking ID for day-level comments
+  const generateDayBookingId = (date: Date, apartmentName: string): string => {
+    // Use local date formatting to avoid timezone issues
+    const year = date.getFullYear();
+    const month = String(date.getMonth() + 1).padStart(2, '0');
+    const day = String(date.getDate()).padStart(2, '0');
+    const dateStr = `${year}-${month}-${day}`;
+    return `DAY_${dateStr}_${apartmentName.replace(/\s+/g, '_')}`;
+  };
+
+  // Check if a day has reservation comments
+  const dayHasReservationComments = (day: any): boolean => {
     return day.reservations.some((resInfo: any) => {
       return resInfo.comments && resInfo.comments.length > 0;
     });
+  };
+
+  // Check if a day has general day comments (yellow comments)
+  const dayHasGeneralComments = (day: any): boolean => {
+    // Check if there are any general day comments for this day
+    // This is now populated by the calendar generation process
+    return day.generalComments && day.generalComments.length > 0;
+  };
+
+  // Check if a day has any comments (reservation or general)
+  const dayHasComments = (day: any): boolean => {
+    return dayHasReservationComments(day) || dayHasGeneralComments(day);
   };
 
   // Remove the useEffect that was automatically fetching data
@@ -199,8 +225,8 @@ export default function StaffCalendarViewer() {
     'Julio', 'Agosto', 'Septiembre', 'Octubre', 'Noviembre', 'Diciembre'
   ];
 
-  const currentYear = new Date().getFullYear();
-  const years = [currentYear - 1, currentYear, currentYear + 1];
+  // Allow broader year selection for comprehensive reservation management
+  const years = [2023, 2024, 2025, 2026, 2027];
 
   return (
     <div className="min-h-screen bg-gray-50">
@@ -362,18 +388,22 @@ export default function StaffCalendarViewer() {
                         {calendar.weeks.map((week, weekIndex) => (
                           <div key={weekIndex} className="grid grid-cols-7 gap-1">
                             {week.days.map((day, dayIndex) => {
-                              const hasComments = dayHasComments(day);
+                              const hasReservationComments = dayHasReservationComments(day);
+                              const hasGeneralComments = dayHasGeneralComments(day);
+                              const hasAnyComments = hasReservationComments || hasGeneralComments;
                               
                               return (
                               <div
                                 key={dayIndex}
                                 className={`
                                   min-h-[100px] p-1 border rounded text-xs group
-                                  ${hasComments 
-                                    ? 'bg-blue-50 border-blue-200' 
-                                    : day.isCurrentMonth 
-                                      ? 'bg-white border-gray-200' 
-                                      : 'bg-gray-50 border-gray-100 text-gray-400'
+                                  ${hasGeneralComments 
+                                    ? 'bg-yellow-50 border-yellow-400 ring-2 ring-yellow-400 ring-inset' 
+                                    : hasReservationComments 
+                                      ? 'bg-blue-50 border-blue-200' 
+                                      : day.isCurrentMonth 
+                                        ? 'bg-white border-gray-200' 
+                                        : 'bg-gray-50 border-gray-100 text-gray-400'
                                   }
                                 `}
                               >

@@ -62,9 +62,9 @@ export async function GET(request: NextRequest) {
     
     let filteredComments = comments;
     
-    // Filter by booking IDs if provided (comma-separated list)
+    // Filter by booking IDs if provided (pipe-separated list to handle commas in IDs)
     if (bookingIds) {
-      const bookingIdList = bookingIds.split(',').map(id => id.trim());
+      const bookingIdList = bookingIds.split('|').map(id => id.trim());
       filteredComments = filteredComments.filter(comment => 
         bookingIdList.includes(comment.bookingId)
       );

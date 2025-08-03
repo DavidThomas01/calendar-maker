@@ -1,12 +1,13 @@
 'use client';
 
-import React, { useRef, useState } from 'react';
+import React, { useRef, useState, useEffect } from 'react';
 import { ApartmentCalendar, ReservationInfo, DayComment } from '@/lib/types';
 import { getBookingColor, getMonthName, getApartmentNumber, generateCalendarFilename, generateCleanDisplayName } from '@/lib/calendar-utils';
 import { Download, X, User, Mail, Home, MessageSquare } from 'lucide-react';
 import html2canvas from 'html2canvas';
 import jsPDF from 'jspdf';
 import DayComments from './DayComments';
+import GeneralDayComments from './GeneralDayComments';
 import { useAuth } from './AuthProvider';
 
 interface CalendarDisplayProps {
@@ -18,28 +19,112 @@ const CalendarDisplay: React.FC<CalendarDisplayProps> = ({ calendar, onDownload 
   const calendarRef = useRef<HTMLDivElement>(null);
   const { userType } = useAuth();
   const [updatedReservations, setUpdatedReservations] = useState<Map<string, ReservationInfo>>(new Map());
+  const [dayComments, setDayComments] = useState<Map<string, DayComment[]>>(new Map());
   const [selectedDayComments, setSelectedDayComments] = useState<{day: Date, comments: {reservation: any, comments: DayComment[]}[]} | null>(null);
   const [selectedReservation, setSelectedReservation] = useState<any | null>(null);
 
   const isOwner = userType === 'owner';
 
-  // Handle comment updates for specific reservations
-  const handleCommentsUpdate = (bookingId: string, comments: DayComment[]) => {
-    const newUpdatedReservations = new Map(updatedReservations);
-    
-    // Find and update the reservation with new comments across all days
-    calendar.weeks.forEach(week => {
-      week.days.forEach(day => {
-        day.reservations.forEach(resInfo => {
-          if (resInfo.reservation.Id === bookingId) {
-            const updatedResInfo = { ...resInfo, comments };
-            newUpdatedReservations.set(`${bookingId}-${day.date.toDateString()}`, updatedResInfo);
+  // Initialize both general day comments and reservation comments when calendar loads
+  useEffect(() => {
+    const loadAllComments = async () => {
+      try {
+        // Generate date range for this calendar month
+        const monthStart = new Date(calendar.year, calendar.month - 1, 1);
+        const monthEnd = new Date(calendar.year, calendar.month, 0);
+        
+        // Import functions
+        const { fetchGeneralDayComments, fetchCommentsForBookings } = await import('@/lib/calendar-utils');
+        
+        // Fetch general day comments for this apartment and month
+        const generalComments = await fetchGeneralDayComments(calendar.apartmentName, monthStart, monthEnd);
+        
+        // Group general comments by day booking ID
+        const commentsByDay = new Map<string, DayComment[]>();
+        generalComments.forEach(comment => {
+          if (comment.bookingId.startsWith('DAY_')) {
+            const existingComments = commentsByDay.get(comment.bookingId) || [];
+            commentsByDay.set(comment.bookingId, [...existingComments, comment]);
           }
         });
+        setDayComments(commentsByDay);
+        
+        // Extract all booking IDs from calendar reservations
+        const bookingIds: string[] = [];
+        calendar.weeks.forEach(week => {
+          week.days.forEach(day => {
+            day.reservations.forEach(resInfo => {
+              if (!bookingIds.includes(resInfo.reservation.Id)) {
+                bookingIds.push(resInfo.reservation.Id);
+              }
+            });
+          });
+        });
+        
+        // Fetch reservation comments
+        if (bookingIds.length > 0) {
+          const reservationComments = await fetchCommentsForBookings(bookingIds);
+          
+          // Group reservation comments and update reservation state
+          const newUpdatedReservations = new Map<string, ReservationInfo>();
+          
+          calendar.weeks.forEach(week => {
+            week.days.forEach(day => {
+              day.reservations.forEach(resInfo => {
+                const commentsForThisReservation = reservationComments.filter(
+                  comment => comment.bookingId === resInfo.reservation.Id
+                );
+                
+                if (commentsForThisReservation.length > 0) {
+                  const key = `${resInfo.reservation.Id}-${day.date.toDateString()}`;
+                  newUpdatedReservations.set(key, {
+                    ...resInfo,
+                    comments: commentsForThisReservation
+                  });
+                }
+              });
+            });
+          });
+          
+          setUpdatedReservations(newUpdatedReservations);
+          console.log(`📝 Loaded ${reservationComments.length} reservation comments for ${calendar.apartmentName}`);
+        }
+        
+        console.log(`📝 Loaded ${generalComments.length} general day comments for ${calendar.apartmentName}`);
+      } catch (error) {
+        console.error('Error loading comments:', error);
+      }
+    };
+
+    loadAllComments();
+  }, [calendar.apartmentName, calendar.year, calendar.month]); // Re-run when calendar changes
+
+  // Handle comment updates for specific reservations
+  const handleCommentsUpdate = (bookingId: string, comments: DayComment[]) => {
+    // Check if this is a day comment (special booking ID format)
+    if (bookingId.startsWith('DAY_')) {
+      // Handle day-level comments
+      const newDayComments = new Map(dayComments);
+      newDayComments.set(bookingId, comments);
+      setDayComments(newDayComments);
+    } else {
+      // Handle reservation comments
+      const newUpdatedReservations = new Map(updatedReservations);
+      
+      // Find and update the reservation with new comments across all days
+      calendar.weeks.forEach(week => {
+        week.days.forEach(day => {
+          day.reservations.forEach(resInfo => {
+            if (resInfo.reservation.Id === bookingId) {
+              const updatedResInfo = { ...resInfo, comments };
+              newUpdatedReservations.set(`${bookingId}-${day.date.toDateString()}`, updatedResInfo);
+            }
+          });
+        });
       });
-    });
-    
-    setUpdatedReservations(newUpdatedReservations);
+      
+      setUpdatedReservations(newUpdatedReservations);
+    }
   };
 
   // Get reservation info with updated comments
@@ -48,12 +133,39 @@ const CalendarDisplay: React.FC<CalendarDisplayProps> = ({ calendar, onDownload 
     return updatedReservations.get(key) || resInfo;
   };
 
-  // Check if a day has any comments
+  // Generate day booking ID for day-level comments
+  const generateDayBookingId = (date: Date, apartmentName: string): string => {
+    // Use local date formatting to avoid timezone issues
+    const year = date.getFullYear();
+    const month = String(date.getMonth() + 1).padStart(2, '0');
+    const day = String(date.getDate()).padStart(2, '0');
+    const dateStr = `${year}-${month}-${day}`;
+    return `DAY_${dateStr}_${apartmentName.replace(/\s+/g, '_')}`;
+  };
+
+  // Get day-level comments for a specific day
+  const getDayLevelComments = (day: any): DayComment[] => {
+    const dayBookingId = generateDayBookingId(day.date, calendar.apartmentName);
+    return dayComments.get(dayBookingId) || [];
+  };
+
+  // Check if a day has any comments (reservation or day-level)
   const dayHasComments = (day: any): boolean => {
-    return day.reservations.some((resInfo: any) => {
+    // Check reservation comments
+    const hasReservationComments = day.reservations.some((resInfo: any) => {
       const updatedResInfo = getReservationInfo(resInfo, day.date.toDateString());
       return updatedResInfo.comments && updatedResInfo.comments.length > 0;
     });
+    
+    // Check day-level comments
+    const hasDayComments = getDayLevelComments(day).length > 0;
+    
+    return hasReservationComments || hasDayComments;
+  };
+
+  // Check specifically for general day comments (yellow comments)
+  const dayHasGeneralComments = (day: any): boolean => {
+    return getDayLevelComments(day).length > 0;
   };
 
   // Get all comments for a day
@@ -71,12 +183,40 @@ const CalendarDisplay: React.FC<CalendarDisplayProps> = ({ calendar, onDownload 
     return commentsData;
   };
 
-  // Handle day click to show comments
+  // Handle day click to show comments or enable comment adding
   const handleDayClick = (day: any, event: React.MouseEvent) => {
     // Prevent day click if clicking on a reservation bar
     if ((event.target as HTMLElement).closest('.reservation-bar')) {
       return;
     }
+    
+    // Check if clicking in the lower part of the day (for general comments)
+    const target = event.target as HTMLElement;
+    const cellRect = target.closest('td')?.getBoundingClientRect();
+    if (cellRect) {
+      const clickY = event.clientY;
+      const cellBottom = cellRect.bottom;
+      const cellHeight = cellRect.height;
+      const lowerThird = cellBottom - (cellHeight * 0.33); // Lower third of the cell
+      
+      // If clicking in lower third and day has general comments, show them
+      if (clickY >= lowerThird && dayHasGeneralComments(day)) {
+        const generalComments = getDayLevelComments(day);
+        setSelectedDayComments({ 
+          day: day.date, 
+          comments: [{ 
+            reservation: null, // No reservation for general comments
+            comments: generalComments 
+          }] 
+        });
+        return;
+      }
+    }
+    
+    // Only owners can interact with day comments
+    if (!isOwner) return;
+    
+    // Default behavior - show all comments if any exist
     if (dayHasComments(day)) {
       const commentsData = getDayComments(day);
       setSelectedDayComments({ day: day.date, comments: commentsData });
@@ -225,6 +365,9 @@ const CalendarDisplay: React.FC<CalendarDisplayProps> = ({ calendar, onDownload 
         <div className="absolute top-4 right-4 bg-white border-2 border-gray-300 rounded-lg p-3 shadow-sm z-10" style={{ fontSize: '12px' }}>
           <div className="text-xs font-semibold text-gray-700 mb-2 text-center">
             Reservas: {calendar.totalBookings}
+            {calendar.totalBookings === 0 && (
+              <div className="text-xs text-green-600 mt-1 font-medium">✓ Calendario vacío</div>
+            )}
           </div>
           <div className="space-y-1">
             <div className="flex items-center gap-2">
@@ -277,7 +420,10 @@ const CalendarDisplay: React.FC<CalendarDisplayProps> = ({ calendar, onDownload 
                       key={dayIndex}
                       className={`border-2 border-gray-600 p-3 align-top relative group ${
                         day.isCurrentMonth ? 'bg-white' : 'bg-gray-50'
-                      } ${hasComments ? 'cursor-pointer' : ''}`}
+                      } ${isOwner ? 'cursor-pointer hover:bg-blue-50' : ''} ${
+                        dayHasGeneralComments(day) ? 'ring-4 ring-yellow-400 ring-inset' : 
+                        hasComments ? 'ring-2 ring-orange-200' : ''
+                      }`}
                       style={{ height: '290px' }}
                       onClick={(e) => handleDayClick(day, e)}
                     >
@@ -308,26 +454,35 @@ const CalendarDisplay: React.FC<CalendarDisplayProps> = ({ calendar, onDownload 
                         )}
                       </div>
 
-                      {/* Comments Section - Below reservations, for each reservation */}
-                      {day.reservations.length > 0 && (
-                        <div className="absolute left-1 right-1 bottom-1" style={{ top: '170px', maxHeight: '115px', overflowY: 'auto' }}>
-                          {day.reservations.map((resInfo, index) => {
-                            const updatedResInfo = getReservationInfo(resInfo, day.date.toDateString());
-                            // Only show comments for check-in days to avoid duplication
-                            if (!resInfo.isCheckin) return null;
-                            
-                            return (
-                              <DayComments
-                                key={`${resInfo.reservation.Id}-${index}`}
-                                reservation={resInfo.reservation}
-                                comments={updatedResInfo.comments || []}
-                                isOwner={isOwner}
-                                onCommentsUpdate={handleCommentsUpdate}
-                              />
-                            );
-                          })}
-                        </div>
-                      )}
+                      {/* Comments Section - Below reservations */}
+                      <div className="absolute left-1 right-1 bottom-1" style={{ top: '170px', maxHeight: '115px', overflowY: 'auto' }}>
+                        {/* Reservation Comments - Only show for check-in days to avoid duplication */}
+                        {day.reservations.length > 0 && day.reservations.map((resInfo, index) => {
+                          const updatedResInfo = getReservationInfo(resInfo, day.date.toDateString());
+                          // Only show comments for check-in days to avoid duplication
+                          if (!resInfo.isCheckin) return null;
+                          
+                          return (
+                            <DayComments
+                              key={`${resInfo.reservation.Id}-${index}`}
+                              reservation={resInfo.reservation}
+                              comments={updatedResInfo.comments || []}
+                              isOwner={isOwner}
+                              onCommentsUpdate={handleCommentsUpdate}
+                            />
+                          );
+                        })}
+                        
+                        {/* Day-Level Comments - Always show for any day */}
+                        <GeneralDayComments
+                          key={`day-${day.date.toDateString()}`}
+                          date={day.date}
+                          apartmentName={calendar.apartmentName}
+                          comments={getDayLevelComments(day)}
+                          isOwner={isOwner}
+                          onCommentsUpdate={handleCommentsUpdate}
+                        />
+                      </div>
                     </td>
                   );
                 })}
@@ -361,16 +516,36 @@ const CalendarDisplay: React.FC<CalendarDisplayProps> = ({ calendar, onDownload 
             <div className="space-y-4">
               {selectedDayComments.comments.map((commentData, index) => (
                 <div key={index} className="border-b border-gray-200 pb-4 last:border-b-0">
-                  <h4 className="font-medium text-gray-900 mb-2">
-                    {commentData.reservation.Name}
-                  </h4>
-                  <div className="space-y-2">
-                    {commentData.comments.map((comment) => (
-                      <div key={comment.id} className="text-sm text-gray-700 bg-gray-50 p-2 rounded">
-                        {comment.text}
+                  {commentData.reservation ? (
+                    // Reservation comments
+                    <>
+                      <h4 className="font-medium text-gray-900 mb-2">
+                        {commentData.reservation.Name}
+                      </h4>
+                      <div className="space-y-2">
+                        {commentData.comments.map((comment) => (
+                          <div key={comment.id} className="text-sm text-gray-700 bg-gray-50 p-2 rounded">
+                            {comment.text}
+                          </div>
+                        ))}
                       </div>
-                    ))}
-                  </div>
+                    </>
+                  ) : (
+                    // General day comments (yellow)
+                    <>
+                      <h4 className="font-medium text-yellow-700 mb-2 flex items-center">
+                        <span className="inline-block w-3 h-3 bg-yellow-400 rounded-full mr-2"></span>
+                        Comentario General del Día
+                      </h4>
+                      <div className="space-y-2">
+                        {commentData.comments.map((comment) => (
+                          <div key={comment.id} className="text-sm text-gray-700 bg-yellow-50 border-l-4 border-yellow-400 p-3 rounded">
+                            {comment.text}
+                          </div>
+                        ))}
+                      </div>
+                    </>
+                  )}
                 </div>
               ))}
             </div>

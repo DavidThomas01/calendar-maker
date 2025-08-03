@@ -106,12 +106,12 @@ export default function AutomaticCalendarPage() {
     [685246, "At Home in Madrid V, Centro, Prado, Barrio Letras"]
   ]);
 
-  // Calculate dynamic 7-month date range based on current date
+  // Calculate expanded date range to cover historical and future months
   const calculateCacheRange = () => {
     const now = new Date();
-    // Previous 2 months + current month + next 4 months = 7 months total
-    const startDate = new Date(now.getFullYear(), now.getMonth() - 2, 1);
-    const endDate = new Date(now.getFullYear(), now.getMonth() + 5, 0); // Last day of 4th month ahead
+    // Cover 12 months before to 18 months ahead for comprehensive coverage
+    const startDate = new Date(now.getFullYear(), now.getMonth() - 12, 1);
+    const endDate = new Date(now.getFullYear(), now.getMonth() + 19, 0); // Last day of 18th month ahead
     
     return {
       startDate: startDate.toISOString().split('T')[0],
@@ -119,45 +119,30 @@ export default function AutomaticCalendarPage() {
     };
   };
 
-  // Get available months based on cached data
+  // Get available months - allow broader access regardless of cache
   const getAvailableMonths = (): { value: number; label: string; year: number }[] => {
-    if (!isDataCached || !cacheStartDate || !cacheEndDate) {
-      // Fallback to current month if no cache
-      const currentMonth = new Date().getMonth() + 1;
-      const currentYear = new Date().getFullYear();
-      return [{ value: currentMonth, label: getMonthName(currentMonth), year: currentYear }];
-    }
-
-    const start = new Date(cacheStartDate);
-    const end = new Date(cacheEndDate);
+    // Allow access to all months from 2023 to 2027 for comprehensive reservation management
     const months: { value: number; label: string; year: number }[] = [];
     
-    const current = new Date(start);
-    while (current <= end) {
-      const month = current.getMonth() + 1;
-      const year = current.getFullYear();
-      months.push({
-        value: month,
-        label: getMonthName(month),
-        year: year
-      });
-      current.setMonth(current.getMonth() + 1);
+    for (let year = 2023; year <= 2027; year++) {
+      for (let month = 1; month <= 12; month++) {
+        months.push({
+          value: month,
+          label: getMonthName(month),
+          year: year
+        });
+      }
     }
     
     return months;
   };
 
-  // Get available years based on cached data
+  // Get available years - allow broader access
   const getAvailableYears = (): number[] => {
-    if (!isDataCached || !cacheStartDate || !cacheEndDate) {
-      return [new Date().getFullYear()];
-    }
-
-    const startYear = new Date(cacheStartDate).getFullYear();
-    const endYear = new Date(cacheEndDate).getFullYear();
     const years: number[] = [];
     
-    for (let year = startYear; year <= endYear; year++) {
+    // Allow years from 2023 to 2027 for comprehensive access
+    for (let year = 2023; year <= 2027; year++) {
       years.push(year);
     }
     
@@ -369,29 +354,53 @@ export default function AutomaticCalendarPage() {
       return;
     }
 
-    // Check if cache needs updating (self-sustainable feature)
+    // Check if cache needs updating (self-sustainable feature) - but don't block if requesting data outside cache range
     if (isCacheOutdated()) {
       console.log('📅 Cache is outdated, refreshing automatically...');
       await refreshCache();
     }
 
+    // Allow calendar generation even without cache for specific months
     if (!isDataCached) {
-      setError('Los datos no están disponibles. Por favor, espera a que se complete la carga inicial.');
-      return;
+      console.log('⚠️ No cached data available, fetching fresh data for the requested month...');
+      // Fetch data specifically for the requested month with expanded range
+      try {
+        const expandedStartDate = new Date(selectedYear, selectedMonth - 3, 1).toISOString().split('T')[0];
+        const expandedEndDate = new Date(selectedYear, selectedMonth + 2, 0).toISOString().split('T')[0];
+        
+        const response = await fetch(`/api/lodgify/reservations?startDate=${expandedStartDate}&endDate=${expandedEndDate}`);
+        if (!response.ok) {
+          throw new Error('Error al obtener las reservas');
+        }
+        
+        const reservationsResponse = await response.json();
+        const freshReservations: LodgifyReservation[] = reservationsResponse.items || [];
+        
+        console.log(`📊 Fetched ${freshReservations.length} fresh reservations for ${getMonthName(selectedMonth)} ${selectedYear}`);
+        
+        // Use fresh data instead of cached data
+        setCachedReservations(freshReservations);
+        setIsDataCached(true);
+      } catch (err) {
+        setError(`Error obteniendo datos: ${err instanceof Error ? err.message : 'Error desconocido'}`);
+        setIsGenerating(false);
+        return;
+      }
     }
 
     setIsGenerating(true);
     setError('');
 
     try {
-      const startDate = `${selectedYear}-${selectedMonth.toString().padStart(2, '0')}-01`;
-      const endDate = new Date(selectedYear, selectedMonth, 0).toISOString().split('T')[0];
+      // Target month dates for filtering
+      const targetStartDate = `${selectedYear}-${selectedMonth.toString().padStart(2, '0')}-01`;
+      const targetEndDate = new Date(selectedYear, selectedMonth, 0).toISOString().split('T')[0];
 
       console.log(`🎯 Generating calendars for ${getMonthName(selectedMonth)} ${selectedYear} using cached data...`);
       
-      // Use cached data - filter for the requested month
-      const requestedStartDate = new Date(startDate);
-      const requestedEndDate = new Date(endDate);
+      // Use cached data - filter for the requested month  
+      const requestedStartDate = new Date(targetStartDate);
+      const requestedEndDate = new Date(targetEndDate);
       
       const reservationsData = cachedReservations.filter(res => {
         const arrivalDate = new Date(res.arrival);
@@ -422,10 +431,9 @@ export default function AutomaticCalendarPage() {
         allReservations.push(...filteredReservations);
       }
 
+      // Allow calendar generation even with 0 reservations to show empty calendars
       if (allReservations.length === 0) {
-        setError(`No se encontraron reservas para ${getMonthName(selectedMonth)} ${selectedYear}.`);
-        setIsGenerating(false);
-        return;
+        console.log(`📅 No reservations found for ${getMonthName(selectedMonth)} ${selectedYear}, generating empty calendars...`);
       }
 
       // Group reservations by property

@@ -26,6 +26,7 @@ export interface CalendarDay {
   isCurrentMonth: boolean;
   reservations: ReservationInfo[];
   comments?: DayComment[];
+  generalComments?: DayComment[]; // General day-level comments (yellow comments)
 }
 
 export interface ReservationInfo {

@@ -57,29 +57,31 @@ export default function OwnerDashboard() {
         <div className="grid md:grid-cols-2 gap-8 max-w-4xl mx-auto">
           
           {/* Calendar Maker Card */}
-          <div className="bg-white rounded-xl shadow-lg overflow-hidden hover:shadow-xl transition-shadow">
-            <div className="p-8">
-              <div className="bg-blue-100 rounded-full w-16 h-16 flex items-center justify-center mb-6">
-                <Calendar className="h-8 w-8 text-blue-600" />
-              </div>
-              <h3 className="text-2xl font-bold text-gray-900 mb-4">
-                Creador de Calendarios
-              </h3>
-              <p className="text-gray-600 mb-6">
-                Genera calendarios personalizados para todas tus propiedades con datos de reservas actualizados desde Lodgify.
-              </p>
-              <div className="space-y-3 mb-8">
-                <div className="flex items-center text-sm text-gray-600">
-                  <div className="w-2 h-2 bg-green-500 rounded-full mr-3"></div>
-                  Integración automática con Lodgify
+          <div className="bg-white rounded-xl shadow-lg overflow-hidden hover:shadow-xl transition-shadow h-full">
+            <div className="p-8 flex flex-col h-full">
+              <div className="flex-grow">
+                <div className="bg-blue-100 rounded-full w-16 h-16 flex items-center justify-center mb-6">
+                  <Calendar className="h-8 w-8 text-blue-600" />
                 </div>
-                <div className="flex items-center text-sm text-gray-600">
-                  <div className="w-2 h-2 bg-green-500 rounded-full mr-3"></div>
-                  Generación de PDFs profesionales
-                </div>
-                <div className="flex items-center text-sm text-gray-600">
-                  <div className="w-2 h-2 bg-green-500 rounded-full mr-3"></div>
-                  Soporte para múltiples propiedades
+                <h3 className="text-2xl font-bold text-gray-900 mb-4">
+                  Creador de Calendarios
+                </h3>
+                <p className="text-gray-600 mb-6">
+                  Genera calendarios personalizados para todas tus propiedades con datos de reservas actualizados desde Lodgify.
+                </p>
+                <div className="space-y-3 mb-8">
+                  <div className="flex items-center text-sm text-gray-600">
+                    <div className="w-2 h-2 bg-green-500 rounded-full mr-3"></div>
+                    Integración automática con Lodgify
+                  </div>
+                  <div className="flex items-center text-sm text-gray-600">
+                    <div className="w-2 h-2 bg-green-500 rounded-full mr-3"></div>
+                    Generación de PDFs profesionales
+                  </div>
+                  <div className="flex items-center text-sm text-gray-600">
+                    <div className="w-2 h-2 bg-green-500 rounded-full mr-3"></div>
+                    Soporte para múltiples propiedades
+                  </div>
                 </div>
               </div>
               <Link 
@@ -93,29 +95,31 @@ export default function OwnerDashboard() {
           </div>
 
           {/* Accounting Manager Card */}
-          <div className="bg-white rounded-xl shadow-lg overflow-hidden hover:shadow-xl transition-shadow">
-            <div className="p-8">
-              <div className="bg-green-100 rounded-full w-16 h-16 flex items-center justify-center mb-6">
-                <Calculator className="h-8 w-8 text-green-600" />
-              </div>
-              <h3 className="text-2xl font-bold text-gray-900 mb-4">
-                Gestor Contable
-              </h3>
-              <p className="text-gray-600 mb-6">
-                Analiza los ingresos, comisiones y precios netos de todas tus reservas con filtros por apartamento y período.
-              </p>
-              <div className="space-y-3 mb-8">
-                <div className="flex items-center text-sm text-gray-600">
-                  <div className="w-2 h-2 bg-green-500 rounded-full mr-3"></div>
-                  Cálculo automático de comisiones (15% Airbnb/VRBO)
+          <div className="bg-white rounded-xl shadow-lg overflow-hidden hover:shadow-xl transition-shadow h-full">
+            <div className="p-8 flex flex-col h-full">
+              <div className="flex-grow">
+                <div className="bg-green-100 rounded-full w-16 h-16 flex items-center justify-center mb-6">
+                  <Calculator className="h-8 w-8 text-green-600" />
                 </div>
-                <div className="flex items-center text-sm text-gray-600">
-                  <div className="w-2 h-2 bg-green-500 rounded-full mr-3"></div>
-                  Filtros por apartamento y período
-                </div>
-                <div className="flex items-center text-sm text-gray-600">
-                  <div className="w-2 h-2 bg-green-500 rounded-full mr-3"></div>
-                  Vista detallada de cada reserva
+                <h3 className="text-2xl font-bold text-gray-900 mb-4">
+                  Gestor Contable
+                </h3>
+                <p className="text-gray-600 mb-6">
+                  Analiza los ingresos, comisiones y precios netos de todas tus reservas con filtros por apartamento y período.
+                </p>
+                <div className="space-y-3 mb-8">
+                  <div className="flex items-center text-sm text-gray-600">
+                    <div className="w-2 h-2 bg-green-500 rounded-full mr-3"></div>
+                    Cálculo automático de comisiones (15% Airbnb/VRBO)
+                  </div>
+                  <div className="flex items-center text-sm text-gray-600">
+                    <div className="w-2 h-2 bg-green-500 rounded-full mr-3"></div>
+                    Filtros por apartamento y período
+                  </div>
+                  <div className="flex items-center text-sm text-gray-600">
+                    <div className="w-2 h-2 bg-green-500 rounded-full mr-3"></div>
+                    Vista detallada de cada reserva
+                  </div>
                 </div>
               </div>
               <Link 
