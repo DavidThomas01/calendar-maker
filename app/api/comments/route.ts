@@ -1,55 +1,9 @@
 import { NextRequest, NextResponse } from 'next/server';
-import { promises as fs } from 'fs';
-import path from 'path';
 import { DayComment } from '@/lib/types';
+import { CommentsStorageService } from '@/lib/storage';
 
-const COMMENTS_FILE = path.join(process.cwd(), 'data', 'comments.json');
-
-// Ensure data directory exists and initialize comments file if needed
-async function ensureCommentsFile() {
-  try {
-    const dataDir = path.join(process.cwd(), 'data');
-    await fs.mkdir(dataDir, { recursive: true });
-    
-    try {
-      await fs.access(COMMENTS_FILE);
-    } catch {
-      // File doesn't exist, create it with empty array
-      await fs.writeFile(COMMENTS_FILE, JSON.stringify([], null, 2));
-    }
-  } catch (error) {
-    console.error('Error ensuring comments file:', error);
-  }
-}
-
-// Read comments from file
-async function readComments(): Promise<DayComment[]> {
-  try {
-    await ensureCommentsFile();
-    const data = await fs.readFile(COMMENTS_FILE, 'utf-8');
-    const comments = JSON.parse(data);
-    // Convert date strings back to Date objects
-    return comments.map((comment: any) => ({
-      ...comment,
-      createdAt: new Date(comment.createdAt),
-      updatedAt: new Date(comment.updatedAt)
-    }));
-  } catch (error) {
-    console.error('Error reading comments:', error);
-    return [];
-  }
-}
-
-// Write comments to file
-async function writeComments(comments: DayComment[]): Promise<void> {
-  try {
-    await ensureCommentsFile();
-    await fs.writeFile(COMMENTS_FILE, JSON.stringify(comments, null, 2));
-  } catch (error) {
-    console.error('Error writing comments:', error);
-    throw error;
-  }
-}
+// Initialize storage service
+const storageService = CommentsStorageService.getInstance();
 
 // GET - Fetch comments for specific booking IDs
 export async function GET(request: NextRequest) {
@@ -58,7 +12,7 @@ export async function GET(request: NextRequest) {
     const bookingIds = searchParams.get('bookingIds');
     const apartmentName = searchParams.get('apartmentName');
 
-    const comments = await readComments();
+    const comments = await storageService.readComments();
     
     let filteredComments = comments;
     
@@ -84,8 +38,13 @@ export async function GET(request: NextRequest) {
 
   } catch (error) {
     console.error('Error fetching comments:', error);
+    const errorMessage = error instanceof Error ? error.message : 'Unknown error';
     return NextResponse.json(
-      { error: 'Error al obtener los comentarios' },
+      { 
+        error: 'Error al obtener los comentarios',
+        details: errorMessage,
+        timestamp: new Date().toISOString()
+      },
       { status: 500 }
     );
   }
@@ -118,7 +77,7 @@ export async function POST(request: NextRequest) {
       );
     }
 
-    const comments = await readComments();
+    const comments = await storageService.readComments();
     
     // Check if comment already exists for this booking
     const existingIndex = comments.findIndex(comment => comment.bookingId === bookingId);
@@ -143,7 +102,7 @@ export async function POST(request: NextRequest) {
       comments.push(newComment);
     }
     
-    await writeComments(comments);
+    await storageService.writeComments(comments);
 
     return NextResponse.json({
       comment: newComment,
@@ -152,8 +111,13 @@ export async function POST(request: NextRequest) {
 
   } catch (error) {
     console.error('Error creating comment:', error);
+    const errorMessage = error instanceof Error ? error.message : 'Unknown error';
     return NextResponse.json(
-      { error: 'Error al crear el comentario' },
+      { 
+        error: 'Error al crear el comentario',
+        details: errorMessage,
+        timestamp: new Date().toISOString()
+      },
       { status: 500 }
     );
   }
@@ -179,7 +143,7 @@ export async function PUT(request: NextRequest) {
       );
     }
 
-    const comments = await readComments();
+    const comments = await storageService.readComments();
     const commentIndex = comments.findIndex(comment => comment.id === id);
 
     if (commentIndex === -1) {
@@ -197,7 +161,7 @@ export async function PUT(request: NextRequest) {
       updatedAt: new Date()
     };
 
-    await writeComments(comments);
+    await storageService.writeComments(comments);
 
     return NextResponse.json({
       comment: comments[commentIndex],
@@ -206,8 +170,13 @@ export async function PUT(request: NextRequest) {
 
   } catch (error) {
     console.error('Error updating comment:', error);
+    const errorMessage = error instanceof Error ? error.message : 'Unknown error';
     return NextResponse.json(
-      { error: 'Error al actualizar el comentario' },
+      { 
+        error: 'Error al actualizar el comentario',
+        details: errorMessage,
+        timestamp: new Date().toISOString()
+      },
       { status: 500 }
     );
   }
@@ -226,7 +195,7 @@ export async function DELETE(request: NextRequest) {
       );
     }
 
-    const comments = await readComments();
+    const comments = await storageService.readComments();
     const commentIndex = comments.findIndex(comment => comment.bookingId === bookingId);
 
     if (commentIndex === -1) {
@@ -238,7 +207,7 @@ export async function DELETE(request: NextRequest) {
 
     // Remove the comment
     const deletedComment = comments.splice(commentIndex, 1)[0];
-    await writeComments(comments);
+    await storageService.writeComments(comments);
 
     return NextResponse.json({
       comment: deletedComment,
@@ -247,8 +216,13 @@ export async function DELETE(request: NextRequest) {
 
   } catch (error) {
     console.error('Error deleting comment:', error);
+    const errorMessage = error instanceof Error ? error.message : 'Unknown error';
     return NextResponse.json(
-      { error: 'Error al eliminar el comentario' },
+      { 
+        error: 'Error al eliminar el comentario',
+        details: errorMessage,
+        timestamp: new Date().toISOString()
+      },
       { status: 500 }
     );
   }

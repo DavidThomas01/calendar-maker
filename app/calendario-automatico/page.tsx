@@ -12,7 +12,8 @@ import {
   getMonthName,
   getApartmentNumber,
   generateCalendarFilename,
-  generateCleanDisplayName
+  generateCleanDisplayName,
+  fetchVrboIcalReservations
 } from '@/lib/calendar-utils';
 import { Reservation, ApartmentCalendar } from '@/lib/types';
 
@@ -80,6 +81,8 @@ export default function AutomaticCalendarPage() {
   const [isLoading, setIsLoading] = useState<boolean>(false);
   const [isGenerating, setIsGenerating] = useState<boolean>(false);
   const [isDownloading, setIsDownloading] = useState<boolean>(false);
+  const [isSyncingVrbo, setIsSyncingVrbo] = useState<boolean>(false);
+  const [vrboSyncStatus, setVrboSyncStatus] = useState<string>('');
   
   // Enhanced cached reservation data - 7 months dynamic range
   const [cachedReservations, setCachedReservations] = useState<LodgifyReservation[]>([]);
@@ -431,6 +434,18 @@ export default function AutomaticCalendarPage() {
         allReservations.push(...filteredReservations);
       }
 
+      // Fetch VRBO ICAL reservations and add them to allReservations
+      try {
+        console.log('🔄 Fetching VRBO ICAL reservations...');
+        const vrboReservations = await fetchVrboIcalReservations(); // Fetch all VRBO reservations
+        if (vrboReservations.length > 0) {
+          console.log(`📊 Adding ${vrboReservations.length} VRBO reservations to calendar`);
+          allReservations.push(...vrboReservations);
+        }
+      } catch (error) {
+        console.error('❌ Error fetching VRBO reservations:', error);
+      }
+
       // Allow calendar generation even with 0 reservations to show empty calendars
       if (allReservations.length === 0) {
         console.log(`📅 No reservations found for ${getMonthName(selectedMonth)} ${selectedYear}, generating empty calendars...`);
@@ -487,6 +502,41 @@ export default function AutomaticCalendarPage() {
       setError(`Error generando calendarios: ${err instanceof Error ? err.message : 'Error desconocido'}`);
     } finally {
       setIsGenerating(false);
+    }
+  };
+
+  // VRBO ICAL Sync Function
+  const handleVrboSync = async () => {
+    setIsSyncingVrbo(true);
+    setVrboSyncStatus('🔄 Sincronizando con VRBO...');
+    
+    try {
+      const vrboReservations = await fetchVrboIcalReservations(undefined, true); // Force refresh
+      
+      if (vrboReservations.length > 0) {
+        setVrboSyncStatus(`✅ Sincronizado: ${vrboReservations.length} reservas VRBO encontradas`);
+        
+        // If calendars are already generated, regenerate them with VRBO data
+        if (calendars.length > 0) {
+          setVrboSyncStatus(`🔄 Regenerando calendarios con datos de VRBO...`);
+          await generateCalendars();
+          setVrboSyncStatus(`✅ Calendarios actualizados con ${vrboReservations.length} reservas VRBO`);
+        } else {
+          setVrboSyncStatus(`✅ ${vrboReservations.length} reservas VRBO listas para generar calendarios`);
+        }
+      } else {
+        setVrboSyncStatus('⚠️ No se encontraron reservas VRBO');
+      }
+      
+      // Clear status after 5 seconds
+      setTimeout(() => setVrboSyncStatus(''), 5000);
+      
+    } catch (error) {
+      console.error('Error syncing VRBO:', error);
+      setVrboSyncStatus(`❌ Error sincronizando VRBO: ${error instanceof Error ? error.message : 'Error desconocido'}`);
+      setTimeout(() => setVrboSyncStatus(''), 5000);
+    } finally {
+      setIsSyncingVrbo(false);
     }
   };
 
@@ -850,6 +900,31 @@ export default function AutomaticCalendarPage() {
               '⚡ Generar Calendarios Instantáneamente'
             )}
           </button>
+
+          {/* VRBO ICAL Sync Button */}
+          <div className="mt-4">
+            <button
+              onClick={handleVrboSync}
+              disabled={isSyncingVrbo}
+              className="w-full px-6 py-3 bg-green-600 text-white font-medium rounded-lg hover:bg-green-700 disabled:bg-gray-400 disabled:cursor-not-allowed transition-colors"
+            >
+              {isSyncingVrbo ? (
+                <div className="flex items-center justify-center">
+                  <div className="animate-spin rounded-full h-5 w-5 border-b-2 border-white mr-2"></div>
+                  Sincronizando VRBO...
+                </div>
+              ) : (
+                '🔄 Sincronizar Reservas VRBO (ICAL)'
+              )}
+            </button>
+            
+            {/* VRBO Sync Status */}
+            {vrboSyncStatus && (
+              <div className="mt-2 p-3 bg-blue-50 border border-blue-200 rounded-lg">
+                <p className="text-sm text-blue-800">{vrboSyncStatus}</p>
+              </div>
+            )}
+          </div>
         </div>
       )}
 

@@ -2,6 +2,7 @@
 
 import React, { useState } from 'react';
 import { DayComment } from '@/lib/types';
+import { parseApiError, displayError, logError, withRetry, apiRequest } from '@/lib/error-handler';
 import { MessageSquare, Plus, Edit2, Trash2, Save, X, Type } from 'lucide-react';
 
 interface GeneralDayCommentsProps {
@@ -51,11 +52,8 @@ const GeneralDayComments: React.FC<GeneralDayCommentsProps> = ({
 
     setIsLoading(true);
     try {
-      const response = await fetch('/api/comments', {
+      const operation = () => apiRequest('/api/comments', {
         method: 'POST',
-        headers: {
-          'Content-Type': 'application/json',
-        },
         body: JSON.stringify({
           bookingId: dayBookingId,
           apartmentName: apartmentName,
@@ -66,11 +64,7 @@ const GeneralDayComments: React.FC<GeneralDayCommentsProps> = ({
         }),
       });
 
-      if (!response.ok) {
-        throw new Error('Failed to create comment');
-      }
-
-      const result = await response.json();
+      const result = await withRetry(operation, 2, 1000);
       const updatedComments = [result.comment]; // One comment per day
       onCommentsUpdate(dayBookingId, updatedComments);
       
@@ -78,8 +72,15 @@ const GeneralDayComments: React.FC<GeneralDayCommentsProps> = ({
       setNewCommentFontSize('medium');
       setIsAddingComment(false);
     } catch (error) {
-      console.error('Error creating comment:', error);
-      alert('Error al crear el comentario');
+      logError('crear comentario general', error, {
+        dayBookingId,
+        apartmentName,
+        date: dateString,
+        textLength: newCommentText.trim().length
+      });
+      
+      const errorDetails = parseApiError(error, 'crear el comentario');
+      displayError(errorDetails, true);
     } finally {
       setIsLoading(false);
     }
@@ -90,11 +91,8 @@ const GeneralDayComments: React.FC<GeneralDayCommentsProps> = ({
 
     setIsLoading(true);
     try {
-      const response = await fetch('/api/comments', {
+      const operation = () => apiRequest('/api/comments', {
         method: 'POST', // Using POST since our API handles update via bookingId
-        headers: {
-          'Content-Type': 'application/json',
-        },
         body: JSON.stringify({
           bookingId: dayBookingId,
           apartmentName: apartmentName,
@@ -105,11 +103,7 @@ const GeneralDayComments: React.FC<GeneralDayCommentsProps> = ({
         }),
       });
 
-      if (!response.ok) {
-        throw new Error('Failed to update comment');
-      }
-
-      const result = await response.json();
+      const result = await withRetry(operation, 2, 1000);
       const updatedComments = [result.comment]; // One comment per day
       onCommentsUpdate(dayBookingId, updatedComments);
       
@@ -117,8 +111,15 @@ const GeneralDayComments: React.FC<GeneralDayCommentsProps> = ({
       setEditText('');
       setEditFontSize('medium');
     } catch (error) {
-      console.error('Error updating comment:', error);
-      alert('Error al actualizar el comentario');
+      logError('actualizar comentario general', error, {
+        commentId,
+        dayBookingId,
+        apartmentName,
+        textLength: editText.trim().length
+      });
+      
+      const errorDetails = parseApiError(error, 'actualizar el comentario');
+      displayError(errorDetails, true);
     } finally {
       setIsLoading(false);
     }
@@ -129,19 +130,22 @@ const GeneralDayComments: React.FC<GeneralDayCommentsProps> = ({
 
     setIsLoading(true);
     try {
-      const response = await fetch(`/api/comments?bookingId=${dayBookingId}`, {
+      const operation = () => apiRequest(`/api/comments?bookingId=${dayBookingId}`, {
         method: 'DELETE',
       });
 
-      if (!response.ok) {
-        throw new Error('Failed to delete comment');
-      }
-
+      await withRetry(operation, 2, 1000);
       const updatedComments: DayComment[] = []; // No comments after deletion
       onCommentsUpdate(dayBookingId, updatedComments);
     } catch (error) {
-      console.error('Error deleting comment:', error);
-      alert('Error al eliminar el comentario');
+      logError('eliminar comentario general', error, {
+        dayBookingId,
+        apartmentName,
+        date: dateString
+      });
+      
+      const errorDetails = parseApiError(error, 'eliminar el comentario');
+      displayError(errorDetails, true);
     } finally {
       setIsLoading(false);
     }

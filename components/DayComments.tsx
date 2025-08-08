@@ -2,6 +2,7 @@
 
 import React, { useState } from 'react';
 import { DayComment, Reservation } from '@/lib/types';
+import { parseApiError, displayError, logError, withRetry, apiRequest } from '@/lib/error-handler';
 import { MessageSquare, Plus, Edit2, Trash2, Save, X, Type } from 'lucide-react';
 
 interface DayCommentsProps {
@@ -38,11 +39,8 @@ const DayComments: React.FC<DayCommentsProps> = ({
 
     setIsLoading(true);
     try {
-      const response = await fetch('/api/comments', {
+      const operation = () => apiRequest('/api/comments', {
         method: 'POST',
-        headers: {
-          'Content-Type': 'application/json',
-        },
         body: JSON.stringify({
           bookingId: reservation.Id,
           apartmentName: reservation.HouseName,
@@ -53,11 +51,7 @@ const DayComments: React.FC<DayCommentsProps> = ({
         }),
       });
 
-      if (!response.ok) {
-        throw new Error('Failed to create comment');
-      }
-
-      const result = await response.json();
+      const result = await withRetry(operation, 2, 1000);
       const updatedComments = [result.comment]; // One comment per booking
       onCommentsUpdate(reservation.Id, updatedComments);
       
@@ -65,8 +59,14 @@ const DayComments: React.FC<DayCommentsProps> = ({
       setNewCommentFontSize('medium');
       setIsAddingComment(false);
     } catch (error) {
-      console.error('Error creating comment:', error);
-      alert('Error al crear el comentario');
+      logError('crear comentario', error, {
+        bookingId: reservation.Id,
+        apartmentName: reservation.HouseName,
+        textLength: newCommentText.trim().length
+      });
+      
+      const errorDetails = parseApiError(error, 'crear el comentario');
+      displayError(errorDetails, true);
     } finally {
       setIsLoading(false);
     }
@@ -77,11 +77,8 @@ const DayComments: React.FC<DayCommentsProps> = ({
 
     setIsLoading(true);
     try {
-      const response = await fetch('/api/comments', {
+      const operation = () => apiRequest('/api/comments', {
         method: 'POST', // Using POST since our API handles update via bookingId
-        headers: {
-          'Content-Type': 'application/json',
-        },
         body: JSON.stringify({
           bookingId: reservation.Id,
           apartmentName: reservation.HouseName,
@@ -92,11 +89,7 @@ const DayComments: React.FC<DayCommentsProps> = ({
         }),
       });
 
-      if (!response.ok) {
-        throw new Error('Failed to update comment');
-      }
-
-      const result = await response.json();
+      const result = await withRetry(operation, 2, 1000);
       const updatedComments = [result.comment]; // One comment per booking
       onCommentsUpdate(reservation.Id, updatedComments);
       
@@ -104,8 +97,14 @@ const DayComments: React.FC<DayCommentsProps> = ({
       setEditText('');
       setEditFontSize('medium');
     } catch (error) {
-      console.error('Error updating comment:', error);
-      alert('Error al actualizar el comentario');
+      logError('actualizar comentario', error, {
+        commentId,
+        bookingId: reservation.Id,
+        textLength: editText.trim().length
+      });
+      
+      const errorDetails = parseApiError(error, 'actualizar el comentario');
+      displayError(errorDetails, true);
     } finally {
       setIsLoading(false);
     }
@@ -116,19 +115,21 @@ const DayComments: React.FC<DayCommentsProps> = ({
 
     setIsLoading(true);
     try {
-      const response = await fetch(`/api/comments?bookingId=${reservation.Id}`, {
+      const operation = () => apiRequest(`/api/comments?bookingId=${reservation.Id}`, {
         method: 'DELETE',
       });
 
-      if (!response.ok) {
-        throw new Error('Failed to delete comment');
-      }
-
+      await withRetry(operation, 2, 1000);
       const updatedComments: DayComment[] = []; // No comments after deletion
       onCommentsUpdate(reservation.Id, updatedComments);
     } catch (error) {
-      console.error('Error deleting comment:', error);
-      alert('Error al eliminar el comentario');
+      logError('eliminar comentario', error, {
+        bookingId: reservation.Id,
+        apartmentName: reservation.HouseName
+      });
+      
+      const errorDetails = parseApiError(error, 'eliminar el comentario');
+      displayError(errorDetails, true);
     } finally {
       setIsLoading(false);
     }

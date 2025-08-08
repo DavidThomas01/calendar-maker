@@ -15,7 +15,8 @@ import {
   groupReservationsByApartment,
   getMonthName,
   generateCalendarFilename,
-  generateCleanDisplayName
+  generateCleanDisplayName,
+  fetchVrboIcalReservations
 } from '@/lib/calendar-utils';
 import { Reservation, ApartmentCalendar } from '@/lib/types';
 
@@ -67,8 +68,21 @@ export default function CSVUploadPage() {
     setError('');
 
     try {
+      // Fetch VRBO ICAL reservations and combine with CSV reservations
+      let allReservations = [...reservations];
+      try {
+        console.log('🔄 CSV Upload: Fetching VRBO ICAL reservations...');
+        const vrboReservations = await fetchVrboIcalReservations(); // Fetch all VRBO reservations
+        if (vrboReservations.length > 0) {
+          console.log(`📊 CSV Upload: Adding ${vrboReservations.length} VRBO reservations`);
+          allReservations.push(...vrboReservations);
+        }
+      } catch (error) {
+        console.error('❌ CSV Upload: Error fetching VRBO reservations:', error);
+      }
+
       // Filter reservations for the selected month
-      const monthReservations = filterReservationsForMonth(reservations, selectedYear, selectedMonth);
+      const monthReservations = filterReservationsForMonth(allReservations, selectedYear, selectedMonth);
       
       if (monthReservations.length === 0) {
         setError(`No se encontraron reservas para ${getMonthName(selectedMonth)} ${selectedYear}.`);

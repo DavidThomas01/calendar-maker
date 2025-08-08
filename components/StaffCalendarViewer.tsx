@@ -4,7 +4,7 @@ import React, { useState, useEffect } from 'react';
 import { Calendar, ChevronDown, ChevronRight, LogOut, Users, Home, X, User, Mail, Clock, MessageSquare } from 'lucide-react';
 import { useAuth } from '@/components/AuthProvider';
 import { Reservation, ApartmentCalendar, DayComment } from '@/lib/types';
-import { parseCSVToReservations, filterReservationsForMonth, generateApartmentCalendar, groupReservationsByApartment, getMonthName, generateCleanDisplayName, getBookingColor } from '@/lib/calendar-utils';
+import { parseCSVToReservations, filterReservationsForMonth, generateApartmentCalendar, groupReservationsByApartment, getMonthName, generateCleanDisplayName, getBookingColor, fetchVrboIcalReservations } from '@/lib/calendar-utils';
 import DayComments from './DayComments';
 import GeneralDayComments from './GeneralDayComments';
 
@@ -133,10 +133,23 @@ export default function StaffCalendarViewer() {
       console.log(`📊 Staff Calendar: Found ${lodgifyReservations.length} reservations from Lodgify`);
       
       // Convert Lodgify data to internal Reservation format
-      const allReservations: Reservation[] = lodgifyReservations.map(lodgifyRes => {
+      const lodgifyReservationsConverted: Reservation[] = lodgifyReservations.map(lodgifyRes => {
         const propertyName = PROPERTY_NAMES.get(lodgifyRes.property_id) || `Propiedad ${lodgifyRes.property_id}`;
         return convertLodgifyToReservation(lodgifyRes, propertyName);
       });
+
+      // Fetch VRBO ICAL reservations and combine with Lodgify
+      let allReservations: Reservation[] = [...lodgifyReservationsConverted];
+      try {
+        console.log('🔄 Staff Calendar: Fetching VRBO ICAL reservations...');
+        const vrboReservations = await fetchVrboIcalReservations(); // Fetch all VRBO reservations
+        if (vrboReservations.length > 0) {
+          console.log(`📊 Staff Calendar: Adding ${vrboReservations.length} VRBO reservations`);
+          allReservations.push(...vrboReservations);
+        }
+      } catch (error) {
+        console.error('❌ Staff Calendar: Error fetching VRBO reservations:', error);
+      }
       
       // Filter reservations for selected month (using existing utility)
       const monthReservations = filterReservationsForMonth(allReservations, selectedYear, selectedMonth);

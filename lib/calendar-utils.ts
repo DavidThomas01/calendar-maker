@@ -506,4 +506,115 @@ export function getMonthName(month: number): string {
     'Julio', 'Agosto', 'Septiembre', 'Octubre', 'Noviembre', 'Diciembre'
   ];
   return months[month - 1];
+}
+
+// VRBO ICAL Sync Functions
+export async function fetchVrboIcalReservations(apartmentName?: string, forceRefresh: boolean = false): Promise<Reservation[]> {
+  try {
+    console.log(`🔄 Starting VRBO ICAL fetch for apartment: ${apartmentName}`);
+    
+    const params = new URLSearchParams();
+    if (apartmentName) {
+      params.append('apartment', apartmentName);
+    }
+    if (forceRefresh) {
+      params.append('refresh', 'true');
+    }
+
+    // Construct URL with proper origin for both client-side and server-side fetch
+    const baseUrl = typeof window !== 'undefined' 
+      ? window.location.origin 
+      : process.env.NEXT_PUBLIC_SITE_URL || 'http://localhost:3000';
+    const url = `${baseUrl}/api/vrbo-ical-sync?${params.toString()}`;
+    console.log(`🔄 Fetching VRBO ICAL reservations from: ${url}`);
+
+    const response = await fetch(url);
+    
+    if (!response.ok) {
+      throw new Error(`HTTP ${response.status}: ${response.statusText}`);
+    }
+
+    const data = await response.json();
+    
+    if (data.error) {
+      console.error('❌ VRBO ICAL Sync API Error:', data.error);
+      return [];
+    }
+
+    console.log(`✅ Fetched ${data.totalReservations} VRBO ICAL reservations`);
+    if (data.errors && data.errors.length > 0) {
+      console.warn('⚠️ VRBO ICAL Sync warnings:', data.errors);
+    }
+
+    // Convert date strings back to Date objects (they come as strings from JSON)
+    const reservations = (data.reservations || []).map((reservation: any) => ({
+      ...reservation,
+      DateArrival: new Date(reservation.DateArrival),
+      DateDeparture: new Date(reservation.DateDeparture),
+      DateCreated: new Date(reservation.DateCreated)
+    }));
+
+    return reservations;
+  } catch (error) {
+    console.error('❌ Error fetching VRBO ICAL reservations:', error);
+    return [];
+  }
+}
+
+export async function mergeReservationsWithVrboIcal(
+  existingReservations: Reservation[], 
+  apartmentName?: string,
+  forceRefresh: boolean = false
+): Promise<Reservation[]> {
+  try {
+    console.log(`🔄 Merging VRBO reservations for apartment: ${apartmentName}, existing reservations: ${existingReservations.length}`);
+    
+    // Fetch VRBO ICAL reservations
+    const vrboReservations = await fetchVrboIcalReservations(apartmentName, forceRefresh);
+    
+    console.log(`📊 Fetched ${vrboReservations.length} VRBO reservations`);
+    
+    if (vrboReservations.length === 0) {
+      console.log('ℹ️ No VRBO ICAL reservations found, returning existing reservations');
+      return existingReservations;
+    }
+
+    // Filter VRBO reservations for specific apartment if provided
+    let filteredVrboReservations = vrboReservations;
+    if (apartmentName) {
+      filteredVrboReservations = vrboReservations.filter(reservation => 
+        reservation.HouseName.toLowerCase().includes(apartmentName.toLowerCase())
+      );
+    }
+
+    // Combine reservations - VRBO ICAL reservations first, then existing
+    const mergedReservations = [...filteredVrboReservations, ...existingReservations];
+    
+    // Remove duplicates based on dates and apartment (keep VRBO ICAL version if conflict)
+    const uniqueReservations = new Map<string, Reservation>();
+    
+    for (const reservation of mergedReservations) {
+      const key = `${reservation.HouseName}_${reservation.DateArrival.toDateString()}_${reservation.DateDeparture.toDateString()}`;
+      
+      // Only keep first occurrence (VRBO ICAL reservations are first, so they take precedence)
+      if (!uniqueReservations.has(key)) {
+        uniqueReservations.set(key, reservation);
+      } else {
+        const existing = uniqueReservations.get(key)!;
+        // If existing is not VRBO sync and new one is VRBO sync, replace it
+        if (existing.Source !== 'VRBO' && reservation.Source === 'VRBO') {
+          uniqueReservations.set(key, reservation);
+        }
+      }
+    }
+
+    const finalReservations = Array.from(uniqueReservations.values());
+    
+    console.log(`🔄 Merged reservations: ${existingReservations.length} existing + ${filteredVrboReservations.length} VRBO ICAL = ${finalReservations.length} total`);
+    
+    return finalReservations;
+  } catch (error) {
+    console.error('❌ Error merging reservations with VRBO ICAL:', error);
+    return existingReservations; // Return original reservations on error
+  }
 } 
