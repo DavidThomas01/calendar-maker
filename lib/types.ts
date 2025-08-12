@@ -25,32 +25,19 @@ export interface CalendarDay {
   date: Date;
   isCurrentMonth: boolean;
   reservations: ReservationInfo[];
-  comments?: DayComment[];
-  generalComments?: DayComment[]; // General day-level comments (yellow comments)
 }
 
 export interface ReservationInfo {
   reservation: Reservation;
   isCheckin: boolean;
   isCheckout: boolean;
-  comments?: DayComment[];
 }
 
 export interface CalendarWeek {
   days: CalendarDay[];
 }
 
-export interface DayComment {
-  id: string;
-  bookingId: string; // The reservation/booking ID this comment belongs to
-  apartmentName: string;
-  date: string; // YYYY-MM-DD format (for reference)
-  text: string;
-  fontSize: 'small' | 'medium' | 'large';
-  createdAt: Date;
-  updatedAt: Date;
-  createdBy: 'owner' | 'staff';
-}
+
 
 export interface ApartmentCalendar {
   apartmentName: string;

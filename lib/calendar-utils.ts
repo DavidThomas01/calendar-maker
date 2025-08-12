@@ -1,4 +1,4 @@
-import { Reservation, CalendarDay, CalendarWeek, ApartmentCalendar, ReservationInfo, DayComment } from './types';
+import { Reservation, CalendarDay, CalendarWeek, ApartmentCalendar, ReservationInfo } from './types';
 
 // Extract apartment number from property name (converts Roman numerals to apartment codes)
 export function getApartmentNumber(propertyName: string): string {
@@ -146,24 +146,12 @@ export function groupDatesByWeek(dates: Date[]): Date[][] {
   return weeks;
 }
 
-export function createReservationLookup(reservations: Reservation[], comments?: DayComment[]): Map<string, ReservationInfo[]> {
+export function createReservationLookup(reservations: Reservation[]): Map<string, ReservationInfo[]> {
   const lookup = new Map<string, ReservationInfo[]>();
-  
-  // Create a map of comments by booking ID for quick lookup
-  const commentsByBookingId = new Map<string, DayComment[]>();
-  if (comments) {
-    comments.forEach(comment => {
-      if (!commentsByBookingId.has(comment.bookingId)) {
-        commentsByBookingId.set(comment.bookingId, []);
-      }
-      commentsByBookingId.get(comment.bookingId)!.push(comment);
-    });
-  }
   
   reservations.forEach(reservation => {
     const arrivalDate = new Date(reservation.DateArrival);
     const departureDate = new Date(reservation.DateDeparture);
-    const reservationComments = commentsByBookingId.get(reservation.Id) || [];
     
     // Handle the stay period (arrival date to day before departure)
     const currentDate = new Date(arrivalDate);
@@ -179,8 +167,7 @@ export function createReservationLookup(reservations: Reservation[], comments?: 
       lookup.get(dateKey)!.push({
         reservation,
         isCheckin,
-        isCheckout,
-        comments: reservationComments
+        isCheckout
       });
       
       currentDate.setDate(currentDate.getDate() + 1);
@@ -195,95 +182,14 @@ export function createReservationLookup(reservations: Reservation[], comments?: 
     lookup.get(departureDateKey)!.push({
       reservation,
       isCheckin: false,
-      isCheckout: true,
-      comments: reservationComments
+      isCheckout: true
     });
   });
   
   return lookup;
 }
 
-// Fetch comments for specific booking IDs
-export async function fetchCommentsForBookings(bookingIds: string[]): Promise<DayComment[]> {
-  try {
-    if (bookingIds.length === 0) {
-      return [];
-    }
-    
-    const response = await fetch(
-      `/api/comments?bookingIds=${bookingIds.join('|')}`
-    );
-    
-    if (!response.ok) {
-      throw new Error('Failed to fetch comments');
-    }
-    
-    const data = await response.json();
-    return data.comments || [];
-  } catch (error) {
-    console.error('Error fetching comments for bookings:', error);
-    return [];
-  }
-}
 
-// Fetch general day comments for an apartment and date range
-export async function fetchGeneralDayComments(
-  apartmentName: string,
-  startDate: Date,
-  endDate: Date
-): Promise<DayComment[]> {
-  try {
-    // Generate day booking IDs for the date range
-    const dayBookingIds: string[] = [];
-    const currentDate = new Date(startDate);
-    
-    while (currentDate <= endDate) {
-      // Use local date formatting to avoid timezone issues
-      const year = currentDate.getFullYear();
-      const month = String(currentDate.getMonth() + 1).padStart(2, '0');
-      const day = String(currentDate.getDate()).padStart(2, '0');
-      const dateStr = `${year}-${month}-${day}`;
-      const dayBookingId = `DAY_${dateStr}_${apartmentName.replace(/\s+/g, '_')}`;
-      dayBookingIds.push(dayBookingId);
-      currentDate.setDate(currentDate.getDate() + 1);
-    }
-    
-    if (dayBookingIds.length === 0) {
-      return [];
-    }
-    
-    const response = await fetch(
-      `/api/comments?bookingIds=${dayBookingIds.join('|')}`
-    );
-    
-    if (!response.ok) {
-      throw new Error('Failed to fetch general day comments');
-    }
-    
-    const data = await response.json();
-    return data.comments || [];
-  } catch (error) {
-    console.error('Error fetching general day comments:', error);
-    return [];
-  }
-}
-
-// Create a comment lookup map by date
-export function createCommentLookup(comments: DayComment[]): Map<string, DayComment[]> {
-  const lookup = new Map<string, DayComment[]>();
-  
-  comments.forEach(comment => {
-    const date = new Date(comment.date);
-    const dateKey = date.toDateString();
-    
-    if (!lookup.has(dateKey)) {
-      lookup.set(dateKey, []);
-    }
-    lookup.get(dateKey)!.push(comment);
-  });
-  
-  return lookup;
-}
 
 export async function generateApartmentCalendar(
   apartmentName: string,
@@ -297,22 +203,8 @@ export async function generateApartmentCalendar(
   // Group dates by week
   const dateWeeks = groupDatesByWeek(calendarDates);
   
-  // Extract all booking IDs from reservations
-  const bookingIds = reservations.map(r => r.Id);
-  
-  // Fetch comments for all these bookings
-  const comments = await fetchCommentsForBookings(bookingIds);
-  
-  // Fetch general day comments for this month
-  const monthStart = new Date(year, month - 1, 1);
-  const monthEnd = new Date(year, month, 0);
-  const generalDayComments = await fetchGeneralDayComments(apartmentName, monthStart, monthEnd);
-  
-  // Combine all comments
-  const allComments = [...comments, ...generalDayComments];
-  
-  // Create reservation lookup with comments attached
-  const reservationLookup = createReservationLookup(reservations, allComments);
+  // Create reservation lookup
+  const reservationLookup = createReservationLookup(reservations);
   
   // Count reservations for this month
   const monthReservations = reservations.filter(r => 
@@ -320,26 +212,13 @@ export async function generateApartmentCalendar(
     (r.DateDeparture.getFullYear() === year && r.DateDeparture.getMonth() === month - 1) ||
     (r.DateArrival < new Date(year, month - 1, 1) && r.DateDeparture > new Date(year, month, 0))
   );
-  
-  // Create a lookup map for general day comments by date
-  const generalCommentsByDate = new Map<string, DayComment[]>();
-  generalDayComments.forEach(comment => {
-    if (comment.bookingId.startsWith('DAY_') && comment.date) {
-      const dateKey = new Date(comment.date).toDateString();
-      if (!generalCommentsByDate.has(dateKey)) {
-        generalCommentsByDate.set(dateKey, []);
-      }
-      generalCommentsByDate.get(dateKey)!.push(comment);
-    }
-  });
 
   // Build calendar weeks
   const weeks: CalendarWeek[] = dateWeeks.map(weekDates => ({
     days: weekDates.map(date => ({
       date,
       isCurrentMonth: date.getMonth() === month - 1,
-      reservations: reservationLookup.get(date.toDateString()) || [],
-      generalComments: generalCommentsByDate.get(date.toDateString()) || []
+      reservations: reservationLookup.get(date.toDateString()) || []
     }))
   }));
   

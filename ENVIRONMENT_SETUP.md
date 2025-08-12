@@ -1,7 +1,7 @@
 # Environment Configuration Guide
 
 ## Overview
-This document provides instructions for setting up the environment variables required for the comments system to work in both development and production environments.
+This document provides instructions for setting up the environment variables required for the calendar system to work in both development and production environments.
 
 ## Production Environment (Vercel)
 
@@ -19,57 +19,25 @@ This document provides instructions for setting up the environment variables req
 
 3. **Verification**
    - After deploying, check the Function Logs in Vercel dashboard
-   - Look for "Using Vercel Blob storage adapter" in the logs
-   - Test comment creation/deletion functionality
+   - Test calendar generation functionality
 
 ## Development Environment
 
-### Option 1: Use Local File System (Recommended for Development)
-- No setup required
-- Comments are stored in `data/comments.json`
-- Storage adapter automatically detects local environment
-- Look for "Using local file system storage adapter" in console logs
+### Local Development
+- No additional setup required for basic calendar functionality
+- Upload CSV files to generate calendars
 
-### Option 2: Use Vercel Blob in Development (Optional)
-If you want to test with Vercel Blob locally:
 
-1. **Install Vercel CLI**
-   ```bash
-   npm i -g vercel
-   ```
-
-2. **Login and Link Project**
-   ```bash
-   vercel login
-   vercel link
-   ```
-
-3. **Pull Environment Variables**
-   ```bash
-   vercel env pull .env.local
-   ```
-
-4. **Start Development Server**
-   ```bash
-   npm run dev
-   ```
 
 ## Environment Detection Logic
 
-The storage system automatically detects the environment:
-
-```typescript
-const isVercel = process.env.VERCEL === '1' || process.env.NODE_ENV === 'production';
-```
-
-- **Development**: Uses local file system storage
-- **Production/Vercel**: Uses Vercel Blob storage
+The application automatically detects the environment for optimal performance.
 
 ## Troubleshooting
 
 ### Common Issues
 
-1. **"Failed to write comments to Vercel Blob" Error**
+1. **Calendar Generation Issues**
    - Check that `@vercel/blob` package is installed
    - Verify the project is deployed to Vercel (not another platform)
    - Check Vercel Function logs for detailed error messages
