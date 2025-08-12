@@ -37,7 +37,14 @@ export async function GET(request: NextRequest) {
     });
 
   } catch (error) {
-    console.error('Error fetching comments:', error);
+    console.error('Error fetching comments:', {
+      operation: 'read',
+      blobKey: 'comments.json',
+      error: error instanceof Error ? error.message : 'Unknown error',
+      vercelEnv: process.env.VERCEL,
+      nodeEnv: process.env.NODE_ENV,
+      timestamp: new Date().toISOString()
+    });
     const errorMessage = error instanceof Error ? error.message : 'Unknown error';
     return NextResponse.json(
       { 
@@ -110,7 +117,14 @@ export async function POST(request: NextRequest) {
     }, { status: existingIndex >= 0 ? 200 : 201 });
 
   } catch (error) {
-    console.error('Error creating comment:', error);
+    console.error('Error creating comment:', {
+      operation: 'write',
+      blobKey: 'comments.json',
+      error: error instanceof Error ? error.message : 'Unknown error',
+      vercelEnv: process.env.VERCEL,
+      nodeEnv: process.env.NODE_ENV,
+      timestamp: new Date().toISOString()
+    });
     const errorMessage = error instanceof Error ? error.message : 'Unknown error';
     return NextResponse.json(
       { 
@@ -169,7 +183,14 @@ export async function PUT(request: NextRequest) {
     });
 
   } catch (error) {
-    console.error('Error updating comment:', error);
+    console.error('Error updating comment:', {
+      operation: 'write',
+      blobKey: 'comments.json',
+      error: error instanceof Error ? error.message : 'Unknown error',
+      vercelEnv: process.env.VERCEL,
+      nodeEnv: process.env.NODE_ENV,
+      timestamp: new Date().toISOString()
+    });
     const errorMessage = error instanceof Error ? error.message : 'Unknown error';
     return NextResponse.json(
       { 
@@ -215,7 +236,14 @@ export async function DELETE(request: NextRequest) {
     });
 
   } catch (error) {
-    console.error('Error deleting comment:', error);
+    console.error('Error deleting comment:', {
+      operation: 'delete',
+      blobKey: 'comments.json',
+      error: error instanceof Error ? error.message : 'Unknown error',
+      vercelEnv: process.env.VERCEL,
+      nodeEnv: process.env.NODE_ENV,
+      timestamp: new Date().toISOString()
+    });
     const errorMessage = error instanceof Error ? error.message : 'Unknown error';
     return NextResponse.json(
       { 

@@ -161,8 +161,6 @@ export default function StaffCalendarViewer() {
       const apartmentCalendars: ApartmentCalendar[] = [];
       for (const [apartmentName, reservations] of apartmentGroups) {
         const calendar = await generateApartmentCalendar(apartmentName, reservations, selectedYear, selectedMonth);
-        
-
         apartmentCalendars.push(calendar);
       }
       
@@ -186,10 +184,10 @@ export default function StaffCalendarViewer() {
 
 
 
-  // Check if a day has reservation comments
+  // Check if a day has reservation comments (only on check-in days to match admin behavior)
   const dayHasReservationComments = (day: any): boolean => {
     return day.reservations.some((resInfo: any) => {
-      return resInfo.comments && resInfo.comments.length > 0;
+      return resInfo.isCheckin && resInfo.comments && resInfo.comments.length > 0;
     });
   };
 
@@ -591,6 +589,7 @@ export default function StaffCalendarViewer() {
                           <div key={weekIndex} className="grid grid-cols-7 gap-1">
                             {week.days.map((day, dayIndex) => {
                               const hasGeneralComments = dayHasGeneralComments(day, calendar.apartmentName);
+                              const hasReservationComments = dayHasReservationComments(day);
                               
                               return (
                               <div
@@ -599,7 +598,7 @@ export default function StaffCalendarViewer() {
                                   day-cell min-h-[100px] p-1 border rounded text-xs group relative
                                   ${hasGeneralComments 
                                     ? 'ring-4 ring-yellow-400 ring-inset bg-yellow-50' 
-                                    : dayHasReservationComments(day) 
+                                    : hasReservationComments 
                                       ? 'bg-blue-50 border-blue-200' 
                                       : day.isCurrentMonth 
                                         ? 'bg-white border-gray-200' 
@@ -634,6 +633,26 @@ export default function StaffCalendarViewer() {
                                       </div>
                                     </button>
                                   ))}
+                                </div>
+
+                                {/* Reservation Comments - Only show for check-in days (read-only) */}
+                                <div className="mt-1">
+                                  {day.reservations.map((resInfo, index) => {
+                                    // Only show comments for check-in days to avoid duplication
+                                    if (!resInfo.isCheckin || !resInfo.comments || resInfo.comments.length === 0) {
+                                      return null;
+                                    }
+                                    
+                                    return (
+                                      <DayComments
+                                        key={`${resInfo.reservation.Id}-${index}`}
+                                        reservation={resInfo.reservation}
+                                        comments={resInfo.comments}
+                                        isOwner={false}
+                                        onCommentsUpdate={handleCommentsUpdate}
+                                      />
+                                    );
+                                  })}
                                 </div>
 
                                 {/* Day-Level Comments - Same as detailed calendar */}

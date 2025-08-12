@@ -137,7 +137,7 @@ async function loadVrboIcalLinks(): Promise<VrboIcalLink[]> {
           console.log(`📋 Loaded ${links.length} VRBO ICAL links from CSV`);
           resolve(links);
         },
-        error: (error) => {
+        error: (error: any) => {
           console.error('❌ CSV parsing error:', error);
           reject(error);
         }

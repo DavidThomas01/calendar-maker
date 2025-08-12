@@ -82,22 +82,26 @@ class VercelBlobAdapter implements StorageAdapter {
   async readComments(): Promise<DayComment[]> {
     try {
       // Import Vercel Blob dynamically to avoid issues in environments without it
-      const { head, get } = await import('@vercel/blob');
+      const { head } = await import('@vercel/blob');
       
       try {
         // First, check if the blob exists using head()
-        await head(this.blobKey);
+        const blobInfo = await head(this.blobKey);
         
-        // Get the blob content directly using the authenticated get() method
-        const blob = await get(this.blobKey);
+        // Fetch the blob content directly using the public URL
+        // Since blobs are public, we can fetch them directly
+        const response = await fetch(blobInfo.url);
         
-        if (!blob) {
-          console.log('No comments blob found, returning empty array');
+        if (!response.ok) {
+          if (response.status === 404) {
+            console.log('Comments blob not found (404), returning empty array');
+            return [];
+          }
+          console.error(`Failed to read blob: ${response.status} ${response.statusText}`);
           return [];
         }
         
-        // Convert blob to text
-        const text = await blob.text();
+        const text = await response.text();
         if (!text.trim()) {
           console.log('Empty blob content, returning empty array');
           return [];
@@ -117,13 +121,18 @@ class VercelBlobAdapter implements StorageAdapter {
           createdAt: new Date(comment.createdAt),
           updatedAt: new Date(comment.updatedAt)
         }));
+        
       } catch (error: any) {
-        if (error.message?.includes('404') || error.status === 404 || error.message?.includes('BlobNotFoundError') || error.message?.includes('The specified blob does not exist')) {
-          // Blob doesn't exist yet, return empty array
+        // Handle blob not found errors
+        if (error.message?.includes('404') || 
+            error.status === 404 || 
+            error.message?.includes('BlobNotFoundError') || 
+            error.message?.includes('The specified blob does not exist')) {
           console.log('Comments blob not found, returning empty array');
           return [];
         }
-        throw error;
+        console.error('Error during blob read operation:', error);
+        return [];
       }
     } catch (error) {
       console.error('Error reading comments from Vercel Blob:', error);
@@ -143,15 +152,16 @@ class VercelBlobAdapter implements StorageAdapter {
       }
       
       const jsonString = JSON.stringify(comments, null, 2);
-      console.log(`Writing ${comments.length} comments to Vercel Blob (${jsonString.length} bytes)`);
+      const bytesWritten = jsonString.length;
       
       const result = await put(this.blobKey, jsonString, {
-        access: 'public', // We control access through our API
+        access: 'public', // Vercel Blob API only supports 'public'
         contentType: 'application/json',
         allowOverwrite: true, // Allow overwriting existing blob
       });
       
-      console.log(`Successfully wrote comments to Vercel Blob: ${result.url}`);
+      console.log(`Successfully wrote ${comments.length} comments to Vercel Blob: ${bytesWritten} bytes, access=public, allowOverwrite=true`);
+      console.log(`Blob URL: ${result.url}`);
     } catch (error) {
       console.error('Error writing comments to Vercel Blob:', error);
       throw new Error(`Failed to write comments to Vercel Blob: ${error instanceof Error ? error.message : 'Unknown error'}`);
