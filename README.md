@@ -79,6 +79,13 @@ Or use the Vercel CLI:
 vercel --prod
 ```
 
+## Feature Flags
+
+- `NEXT_PUBLIC_COMMENTS_BACKEND_ENABLED` (default: `false`)
+  - Controls whether the comments backend is active.
+  - Set to `true` to enable existing comments integration (if present).
+  - Leave `false` to keep UI-only mode without any persistence.
+
 ## Usage
 
 1. **Upload CSV File**: Drag and drop your reservation CSV file or click to browse
