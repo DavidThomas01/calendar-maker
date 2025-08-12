@@ -82,25 +82,22 @@ class VercelBlobAdapter implements StorageAdapter {
   async readComments(): Promise<DayComment[]> {
     try {
       // Import Vercel Blob dynamically to avoid issues in environments without it
-      const { list } = await import('@vercel/blob');
+      const { head, get } = await import('@vercel/blob');
       
       try {
-        // List all blobs and find our comments blob
-        const response = await list();
-        const commentsBlob = response.blobs.find(blob => blob.pathname === this.blobKey);
+        // First, check if the blob exists using head()
+        await head(this.blobKey);
         
-        if (!commentsBlob) {
+        // Get the blob content directly using the authenticated get() method
+        const blob = await get(this.blobKey);
+        
+        if (!blob) {
           console.log('No comments blob found, returning empty array');
           return [];
         }
         
-        // Fetch the blob content using the URL
-        const blobResponse = await fetch(commentsBlob.url);
-        if (!blobResponse.ok) {
-          throw new Error(`Failed to fetch blob: ${blobResponse.status} ${blobResponse.statusText}`);
-        }
-        
-        const text = await blobResponse.text();
+        // Convert blob to text
+        const text = await blob.text();
         if (!text.trim()) {
           console.log('Empty blob content, returning empty array');
           return [];
@@ -121,9 +118,9 @@ class VercelBlobAdapter implements StorageAdapter {
           updatedAt: new Date(comment.updatedAt)
         }));
       } catch (error: any) {
-        if (error.message?.includes('404') || error.status === 404 || error.message?.includes('BlobNotFoundError')) {
+        if (error.message?.includes('404') || error.status === 404 || error.message?.includes('BlobNotFoundError') || error.message?.includes('The specified blob does not exist')) {
           // Blob doesn't exist yet, return empty array
-          console.log('Comments blob not found (404), returning empty array');
+          console.log('Comments blob not found, returning empty array');
           return [];
         }
         throw error;
