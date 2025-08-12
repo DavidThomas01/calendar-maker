@@ -69,56 +69,36 @@ class LocalFileSystemAdapter implements StorageAdapter {
 }
 
 /**
- * Vercel Blob storage adapter for production environment
+ * Vercel KV storage adapter for production environment
  */
-class VercelBlobAdapter implements StorageAdapter {
-  private readonly blobKey = 'comments.json';
+class VercelKVAdapter implements StorageAdapter {
+  private readonly commentsKey = 'comments';
 
   async initialize(): Promise<void> {
-    // No initialization needed for Vercel Blob
+    // No initialization needed for Vercel KV
     return Promise.resolve();
   }
 
   async readComments(): Promise<DayComment[]> {
     try {
-      // Import Vercel Blob dynamically to avoid issues in environments without it
-      const { list } = await import('@vercel/blob');
+      // Import Vercel KV dynamically to avoid issues in environments without it
+      const { kv } = await import('@vercel/kv');
       
-      try {
-        // List all blobs and find our comments blob
-        const response = await list();
-        const commentsBlob = response.blobs.find(blob => blob.pathname === this.blobKey);
-        
-        if (!commentsBlob) {
-          console.log('No comments blob found, returning empty array');
-          return [];
-        }
-        
-        // Fetch the blob content using the URL
-        const blobResponse = await fetch(commentsBlob.url);
-        if (!blobResponse.ok) {
-          throw new Error(`Failed to fetch blob: ${blobResponse.status}`);
-        }
-        
-        const text = await blobResponse.text();
-        const comments = JSON.parse(text);
-        
-        // Convert date strings back to Date objects
-        return comments.map((comment: any) => ({
-          ...comment,
-          createdAt: new Date(comment.createdAt),
-          updatedAt: new Date(comment.updatedAt)
-        }));
-      } catch (error: any) {
-        if (error.message?.includes('404') || error.status === 404) {
-          // Blob doesn't exist yet, return empty array
-          console.log('Comments blob not found (404), returning empty array');
-          return [];
-        }
-        throw error;
+      const comments = await kv.get<DayComment[]>(this.commentsKey);
+      
+      if (!comments || !Array.isArray(comments)) {
+        console.log('No comments found in KV, returning empty array');
+        return [];
       }
+      
+      // Convert date strings back to Date objects
+      return comments.map((comment: any) => ({
+        ...comment,
+        createdAt: new Date(comment.createdAt),
+        updatedAt: new Date(comment.updatedAt)
+      }));
     } catch (error) {
-      console.error('Error reading comments from Vercel Blob:', error);
+      console.error('Error reading comments from Vercel KV:', error);
       // In production, we don't want to fail completely, return empty array
       return [];
     }
@@ -126,17 +106,13 @@ class VercelBlobAdapter implements StorageAdapter {
 
   async writeComments(comments: DayComment[]): Promise<void> {
     try {
-      // Import Vercel Blob dynamically
-      const { put } = await import('@vercel/blob');
+      // Import Vercel KV dynamically
+      const { kv } = await import('@vercel/kv');
       
-      const jsonString = JSON.stringify(comments, null, 2);
-      await put(this.blobKey, jsonString, {
-        access: 'public', // We control access through our API
-        contentType: 'application/json',
-      });
+      await kv.set(this.commentsKey, comments);
     } catch (error) {
-      console.error('Error writing comments to Vercel Blob:', error);
-      throw new Error(`Failed to write comments to Vercel Blob: ${error instanceof Error ? error.message : 'Unknown error'}`);
+      console.error('Error writing comments to Vercel KV:', error);
+      throw new Error(`Failed to write comments to Vercel KV: ${error instanceof Error ? error.message : 'Unknown error'}`);
     }
   }
 }
@@ -149,8 +125,8 @@ export function createStorageAdapter(): StorageAdapter {
   const isVercel = process.env.VERCEL === '1' || process.env.NODE_ENV === 'production';
   
   if (isVercel) {
-    console.log('Using Vercel Blob storage adapter');
-    return new VercelBlobAdapter();
+    console.log('Using Vercel KV storage adapter');
+    return new VercelKVAdapter();
   } else {
     console.log('Using local file system storage adapter');
     return new LocalFileSystemAdapter();

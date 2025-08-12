@@ -5,7 +5,7 @@ import { DayComment } from '@/lib/types';
 import { CommentsStorageService } from '@/lib/storage';
 
 /**
- * Migration endpoint to transfer comments from local file system to Vercel Blob storage
+ * Migration endpoint to transfer comments from local file system to Vercel KV storage
  * This should be called once after deployment to migrate existing data
  */
 export async function POST(request: NextRequest) {
@@ -23,7 +23,7 @@ export async function POST(request: NextRequest) {
       );
     }
 
-    // Initialize storage service (will use Vercel Blob in production)
+    // Initialize storage service (will use Vercel KV in production)
     const storageService = CommentsStorageService.getInstance();
 
     // Check if migration has already been performed
@@ -118,7 +118,7 @@ export async function GET(request: NextRequest) {
     
     return NextResponse.json({
       environment: isVercel ? 'production' : 'development',
-      storageType: isVercel ? 'vercel-blob' : 'local-filesystem',
+      storageType: isVercel ? 'vercel-kv' : 'local-filesystem',
       commentsCount: existingComments.length,
       migrationRequired: isVercel && existingComments.length === 0,
       comments: existingComments.map(c => ({
