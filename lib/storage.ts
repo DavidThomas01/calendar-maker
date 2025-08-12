@@ -97,11 +97,22 @@ class VercelBlobAdapter implements StorageAdapter {
         // Fetch the blob content using the URL
         const blobResponse = await fetch(commentsBlob.url);
         if (!blobResponse.ok) {
-          throw new Error(`Failed to fetch blob: ${blobResponse.status}`);
+          throw new Error(`Failed to fetch blob: ${blobResponse.status} ${blobResponse.statusText}`);
         }
         
         const text = await blobResponse.text();
+        if (!text.trim()) {
+          console.log('Empty blob content, returning empty array');
+          return [];
+        }
+        
         const comments = JSON.parse(text);
+        
+        // Ensure comments is an array
+        if (!Array.isArray(comments)) {
+          console.warn('Comments data is not an array, returning empty array');
+          return [];
+        }
         
         // Convert date strings back to Date objects
         return comments.map((comment: any) => ({
@@ -110,7 +121,7 @@ class VercelBlobAdapter implements StorageAdapter {
           updatedAt: new Date(comment.updatedAt)
         }));
       } catch (error: any) {
-        if (error.message?.includes('404') || error.status === 404) {
+        if (error.message?.includes('404') || error.status === 404 || error.message?.includes('BlobNotFoundError')) {
           // Blob doesn't exist yet, return empty array
           console.log('Comments blob not found (404), returning empty array');
           return [];
@@ -129,11 +140,21 @@ class VercelBlobAdapter implements StorageAdapter {
       // Import Vercel Blob dynamically
       const { put } = await import('@vercel/blob');
       
+      // Ensure comments is an array
+      if (!Array.isArray(comments)) {
+        throw new Error('Comments must be an array');
+      }
+      
       const jsonString = JSON.stringify(comments, null, 2);
-      await put(this.blobKey, jsonString, {
+      console.log(`Writing ${comments.length} comments to Vercel Blob (${jsonString.length} bytes)`);
+      
+      const result = await put(this.blobKey, jsonString, {
         access: 'public', // We control access through our API
         contentType: 'application/json',
+        allowOverwrite: true, // Allow overwriting existing blob
       });
+      
+      console.log(`Successfully wrote comments to Vercel Blob: ${result.url}`);
     } catch (error) {
       console.error('Error writing comments to Vercel Blob:', error);
       throw new Error(`Failed to write comments to Vercel Blob: ${error instanceof Error ? error.message : 'Unknown error'}`);
