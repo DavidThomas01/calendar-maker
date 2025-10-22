@@ -13,7 +13,8 @@ import {
   getApartmentNumber,
   generateCalendarFilename,
   generateCleanDisplayName,
-  fetchVrboIcalReservations
+  fetchVrboIcalReservations,
+  mergeReservationsWithStaticCSV
 } from '@/lib/calendar-utils';
 import { Reservation, ApartmentCalendar } from '@/lib/types';
 
@@ -416,7 +417,7 @@ export default function AutomaticCalendarPage() {
       console.log(`📊 Found ${reservationsData.length} reservations in cache for ${getMonthName(selectedMonth)} ${selectedYear}`);
 
       // Convert and filter reservations
-      const allReservations: Reservation[] = [];
+      let allReservations: Reservation[] = [];
       const fetchAllProperties = selectedProperties.includes(0);
 
       if (fetchAllProperties) {
@@ -444,6 +445,15 @@ export default function AutomaticCalendarPage() {
         }
       } catch (error) {
         console.error('❌ Error fetching VRBO reservations:', error);
+      }
+
+      // Merge with static CSV reservations (October 2025)
+      try {
+        console.log('🔄 Merging static CSV reservations...');
+        allReservations = await mergeReservationsWithStaticCSV(allReservations);
+        console.log(`📊 Total reservations after merging static CSV: ${allReservations.length}`);
+      } catch (error) {
+        console.error('❌ Error merging static CSV reservations:', error);
       }
 
       // Allow calendar generation even with 0 reservations to show empty calendars

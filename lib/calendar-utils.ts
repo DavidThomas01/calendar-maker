@@ -510,6 +510,11 @@ export function getMonthName(month: number): string {
 
 // VRBO ICAL Sync Functions
 export async function fetchVrboIcalReservations(apartmentName?: string, forceRefresh: boolean = false): Promise<Reservation[]> {
+  // VRBO ICAL sync is currently disabled - returning empty array
+  console.log(`🚫 VRBO ICAL sync is disabled, returning empty reservations array`);
+  return [];
+  
+  /* DISABLED VRBO SYNC CODE - KEPT FOR FUTURE RE-ENABLING
   try {
     console.log(`🔄 Starting VRBO ICAL fetch for apartment: ${apartmentName}`);
     
@@ -559,6 +564,7 @@ export async function fetchVrboIcalReservations(apartmentName?: string, forceRef
     console.error('❌ Error fetching VRBO ICAL reservations:', error);
     return [];
   }
+  */
 }
 
 export async function mergeReservationsWithVrboIcal(
@@ -615,6 +621,85 @@ export async function mergeReservationsWithVrboIcal(
     return finalReservations;
   } catch (error) {
     console.error('❌ Error merging reservations with VRBO ICAL:', error);
+    return existingReservations; // Return original reservations on error
+  }
+}
+
+// Static CSV reservation loading functions
+export async function loadStaticCSVReservations(csvFileName: string): Promise<Reservation[]> {
+  try {
+    console.log(`🔄 Loading static CSV reservations from: ${csvFileName}`);
+    
+    // Construct URL for the static CSV file in the data directory
+    const baseUrl = typeof window !== 'undefined' 
+      ? window.location.origin 
+      : process.env.NEXT_PUBLIC_SITE_URL || 'http://localhost:3000';
+    const url = `${baseUrl}/api/load-static-csv?filename=${encodeURIComponent(csvFileName)}`;
+    
+    const response = await fetch(url);
+    
+    if (!response.ok) {
+      throw new Error(`HTTP ${response.status}: ${response.statusText}`);
+    }
+
+    const data = await response.json();
+    
+    if (data.error) {
+      console.error('❌ Static CSV loading error:', data.error);
+      return [];
+    }
+
+    console.log(`✅ Loaded ${data.reservations.length} static CSV reservations from ${csvFileName}`);
+
+    // Convert date strings back to Date objects and parse reservations
+    const reservations = parseCSVToReservations(data.reservations);
+
+    return reservations;
+  } catch (error) {
+    console.error('❌ Error loading static CSV reservations:', error);
+    return [];
+  }
+}
+
+export async function mergeReservationsWithStaticCSV(
+  existingReservations: Reservation[], 
+  csvFileName: string = 'october_2025_reservations.csv'
+): Promise<Reservation[]> {
+  try {
+    console.log(`🔄 Merging static CSV reservations from: ${csvFileName}, existing reservations: ${existingReservations.length}`);
+    
+    // Load static CSV reservations
+    const staticReservations = await loadStaticCSVReservations(csvFileName);
+    
+    console.log(`📊 Loaded ${staticReservations.length} static CSV reservations`);
+    
+    if (staticReservations.length === 0) {
+      console.log('ℹ️ No static CSV reservations found, returning existing reservations');
+      return existingReservations;
+    }
+
+    // Combine reservations - existing reservations first, then static CSV
+    const mergedReservations = [...existingReservations, ...staticReservations];
+    
+    // Remove duplicates based on dates, apartment, and guest name (keep existing version if conflict)
+    const uniqueReservations = new Map<string, Reservation>();
+    
+    for (const reservation of mergedReservations) {
+      const key = `${reservation.HouseName}_${reservation.DateArrival.toDateString()}_${reservation.DateDeparture.toDateString()}_${reservation.Name}`;
+      
+      // Only keep first occurrence (existing reservations are first, so they take precedence over static CSV)
+      if (!uniqueReservations.has(key)) {
+        uniqueReservations.set(key, reservation);
+      }
+    }
+
+    const finalReservations = Array.from(uniqueReservations.values());
+    
+    console.log(`🔄 Merged reservations: ${existingReservations.length} existing + ${staticReservations.length} static CSV = ${finalReservations.length} total`);
+    
+    return finalReservations;
+  } catch (error) {
+    console.error('❌ Error merging reservations with static CSV:', error);
     return existingReservations; // Return original reservations on error
   }
 } 

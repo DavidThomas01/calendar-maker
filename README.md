@@ -137,7 +137,52 @@ This project is licensed under the MIT License - see the LICENSE file for detail
 
 For support, please open an issue on GitHub or contact [your-email].
 
+## September 2025 Reservations 🎉
+
+**New Feature**: Static CSV reservations for September 2025 have been integrated!
+
+### What's Included
+- **42 reservations** for September 2025 across all 10 properties
+- **Automatic integration** with both Staff and Admin calendar views
+- **Proper property mapping** to existing apartment names
+- **Airbnb source** for all reservations as requested
+
+### How to View
+1. **Staff Calendar**: Navigate to the Staff Calendar and select September 2025
+2. **Admin Calendar**: Use the Automatic Calendar Generator for September 2025
+3. **CSV Upload**: Upload any CSV - September 2025 reservations will be automatically included
+
+### Guest Names Included
+Alberto, Vladimir, Saige, John, Beth, Vanisha, Pepe, Maria, Nicola, Kelly, Sarah, Kara, Sonia, Melissa, Pablo Antonio, Chris, Dominique, Cassandra, B (Unknown Chinese), Ai, Jerald, Masood, Bruce, Marie-Louise, Nikki, Debbie, Unknown Korean Person, Marina, Magdalena, Olga, Derek, Sandy, Simona, Marianne, Solange, Carol, Mark, Taylor, Bridget, Karell Roberto, Annette, Signe
+
+### Testing
+Visit `/test-september-integration` to run comprehensive integration tests that verify:
+- ✅ CSV loading functionality
+- ✅ Property name mapping
+- ✅ Date parsing and validation
+- ✅ Merge functionality with existing reservations
+- ✅ Calendar filtering for September 2025
+- ✅ Apartment grouping
+- ✅ Guest name preservation
+
+### Technical Details
+- **File**: `data/september_2025_reservations.csv`
+- **API**: `/api/load-static-csv`
+- **Integration**: Automatic merge with Lodgify and VRBO reservations
+- **Priority**: Existing reservations take precedence over static CSV
+
 ## Changelog
+
+### v1.1.0 - September 2025 Integration
+- ✅ Added 42 static reservations for September 2025
+- ✅ Integrated with Staff Calendar view
+- ✅ Integrated with Admin Calendar view
+- ✅ Integrated with CSV Upload functionality
+- ✅ Proper property name mapping to existing system
+- ✅ Smart merge logic with existing reservations
+- ✅ Comprehensive test suite for validation
+- ✅ API endpoint for loading static CSV files
+- ✅ Security measures for file access
 
 ### v1.0.0
 - Initial release

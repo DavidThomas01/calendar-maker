@@ -4,7 +4,7 @@ import React, { useState, useEffect } from 'react';
 import { Calendar, ChevronDown, ChevronRight, LogOut, Users, Home, X, User, Mail, Clock, MessageSquare } from 'lucide-react';
 import { useAuth } from '@/components/AuthProvider';
 import { Reservation, ApartmentCalendar, DayComment } from '@/lib/types';
-import { parseCSVToReservations, filterReservationsForMonth, generateApartmentCalendar, groupReservationsByApartment, getMonthName, generateCleanDisplayName, getBookingColor, fetchVrboIcalReservations } from '@/lib/calendar-utils';
+import { parseCSVToReservations, filterReservationsForMonth, generateApartmentCalendar, groupReservationsByApartment, getMonthName, generateCleanDisplayName, getBookingColor, fetchVrboIcalReservations, mergeReservationsWithStaticCSV } from '@/lib/calendar-utils';
 import DayComments from './DayComments';
 import GeneralDayComments from './GeneralDayComments';
 
@@ -149,6 +149,15 @@ export default function StaffCalendarViewer() {
         }
       } catch (error) {
         console.error('❌ Staff Calendar: Error fetching VRBO reservations:', error);
+      }
+
+      // Merge with static CSV reservations (October 2025)
+      try {
+        console.log('🔄 Staff Calendar: Merging static CSV reservations...');
+        allReservations = await mergeReservationsWithStaticCSV(allReservations);
+        console.log(`📊 Staff Calendar: Total reservations after merging: ${allReservations.length}`);
+      } catch (error) {
+        console.error('❌ Staff Calendar: Error merging static CSV reservations:', error);
       }
       
       // Filter reservations for selected month (using existing utility)

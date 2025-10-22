@@ -16,7 +16,8 @@ import {
   getMonthName,
   generateCalendarFilename,
   generateCleanDisplayName,
-  fetchVrboIcalReservations
+  fetchVrboIcalReservations,
+  mergeReservationsWithStaticCSV
 } from '@/lib/calendar-utils';
 import { Reservation, ApartmentCalendar } from '@/lib/types';
 
@@ -79,6 +80,15 @@ export default function CSVUploadPage() {
         }
       } catch (error) {
         console.error('❌ CSV Upload: Error fetching VRBO reservations:', error);
+      }
+
+      // Merge with static CSV reservations (October 2025)
+      try {
+        console.log('🔄 CSV Upload: Merging static CSV reservations...');
+        allReservations = await mergeReservationsWithStaticCSV(allReservations);
+        console.log(`📊 CSV Upload: Total reservations after merging: ${allReservations.length}`);
+      } catch (error) {
+        console.error('❌ CSV Upload: Error merging static CSV reservations:', error);
       }
 
       // Filter reservations for the selected month
