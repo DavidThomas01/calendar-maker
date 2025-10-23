@@ -151,10 +151,10 @@ export default function StaffCalendarViewer() {
         console.error('❌ Staff Calendar: Error fetching VRBO reservations:', error);
       }
 
-      // Merge with static CSV reservations (October 2025)
+      // Merge with static CSV reservations (October 2025 and November 2025)
       try {
         console.log('🔄 Staff Calendar: Merging static CSV reservations...');
-        allReservations = await mergeReservationsWithStaticCSV(allReservations);
+        allReservations = await mergeReservationsWithStaticCSV(allReservations, ['october_2025_reservations.csv', 'november_2025_airbnb_reservations.csv']);
         console.log(`📊 Staff Calendar: Total reservations after merging: ${allReservations.length}`);
       } catch (error) {
         console.error('❌ Staff Calendar: Error merging static CSV reservations:', error);
@@ -629,14 +629,14 @@ export default function StaffCalendarViewer() {
                                         e.stopPropagation(); // Prevent day click
                                         handleReservationClick(resInfo.reservation);
                                       }}
-                                      className="w-full text-xs px-1 py-0.5 rounded text-white overflow-hidden hover:opacity-80 transition-opacity"
+                                      className="w-full text-base font-bold px-1 py-1 rounded text-white overflow-hidden hover:opacity-80 transition-opacity"
                                       style={{ 
                                         backgroundColor: getBookingColor(resInfo.reservation.Source, resInfo.reservation.Id.toString())
                                       }}
                                     >
                                       <div className="flex items-center">
-                                        {resInfo.isCheckin && <span className="text-[10px] mr-1">✓</span>}
-                                        {resInfo.isCheckout && <span className="text-[10px] mr-1">✗</span>}
+                                        {resInfo.isCheckin && <span className="text-sm mr-1">✓</span>}
+                                        {resInfo.isCheckout && <span className="text-sm mr-1">✗</span>}
                                         <span className="truncate">
                                           {resInfo.reservation.Name.split(' ')[0]}
                                         </span>

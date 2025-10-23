@@ -60,28 +60,36 @@ export function generateCleanDisplayName(apartmentName: string): string {
 }
 
 export function parseCSVToReservations(csvData: any[]): Reservation[] {
-  return csvData.map(row => ({
-    Id: row.Id,
-    Type: row.Type,
-    Source: row.Source,
-    SourceText: row.SourceText,
-    Name: row.Name,
-    DateArrival: new Date(row.DateArrival),
-    DateDeparture: new Date(row.DateDeparture),
-    Nights: parseInt(row.Nights) || 0,
-    HouseName: row.HouseName,
-    InternalCode: row.InternalCode,
-    House_Id: row.House_Id,
-    RoomTypes: row.RoomTypes,
-    People: parseInt(row.People) || 0,
-    DateCreated: new Date(row.DateCreated),
-    TotalAmount: parseFloat(row.TotalAmount) || 0,
-    Currency: row.Currency,
-    Status: row.Status,
-    Email: row.Email,
-    Phone: row.Phone,
-    CountryName: row.CountryName,
-  })).filter(reservation => 
+  return csvData.map(row => {
+    // Handle empty DateCreated field gracefully
+    let dateCreated = new Date(row.DateCreated);
+    if (!row.DateCreated || isNaN(dateCreated.getTime())) {
+      dateCreated = new Date(); // Use current date as fallback
+    }
+    
+    return {
+      Id: row.Id || '',
+      Type: row.Type || 'Booking',
+      Source: row.Source || 'Airbnb',
+      SourceText: row.SourceText || '',
+      Name: row.Name || 'Guest',
+      DateArrival: new Date(row.DateArrival),
+      DateDeparture: new Date(row.DateDeparture),
+      Nights: parseInt(row.Nights) || 0,
+      HouseName: row.HouseName || '',
+      InternalCode: row.InternalCode || '',
+      House_Id: row.House_Id || '',
+      RoomTypes: row.RoomTypes || '',
+      People: parseInt(row.People) || 2, // Default to 2 people if not specified
+      DateCreated: dateCreated,
+      TotalAmount: parseFloat(row.TotalAmount) || 0,
+      Currency: row.Currency || 'EUR',
+      Status: row.Status || 'Booked',
+      Email: row.Email || '',
+      Phone: row.Phone || '',
+      CountryName: row.CountryName || '',
+    };
+  }).filter(reservation => 
     // Filter for confirmed bookings only
     ['Booked', 'Open'].includes(reservation.Status) &&
     !isNaN(reservation.DateArrival.getTime()) &&
@@ -663,23 +671,29 @@ export async function loadStaticCSVReservations(csvFileName: string): Promise<Re
 
 export async function mergeReservationsWithStaticCSV(
   existingReservations: Reservation[], 
-  csvFileName: string = 'october_2025_reservations.csv'
+  csvFileNames: string[] = ['october_2025_reservations.csv', 'november_2025_airbnb_reservations.csv']
 ): Promise<Reservation[]> {
   try {
-    console.log(`🔄 Merging static CSV reservations from: ${csvFileName}, existing reservations: ${existingReservations.length}`);
+    console.log(`🔄 Merging static CSV reservations from: ${csvFileNames.join(', ')}, existing reservations: ${existingReservations.length}`);
     
-    // Load static CSV reservations
-    const staticReservations = await loadStaticCSVReservations(csvFileName);
+    // Load all static CSV reservations from multiple files
+    const allStaticReservations: Reservation[] = [];
     
-    console.log(`📊 Loaded ${staticReservations.length} static CSV reservations`);
+    for (const csvFileName of csvFileNames) {
+      const staticReservations = await loadStaticCSVReservations(csvFileName);
+      console.log(`📊 Loaded ${staticReservations.length} reservations from ${csvFileName}`);
+      allStaticReservations.push(...staticReservations);
+    }
     
-    if (staticReservations.length === 0) {
+    console.log(`📊 Total loaded ${allStaticReservations.length} static CSV reservations from ${csvFileNames.length} files`);
+    
+    if (allStaticReservations.length === 0) {
       console.log('ℹ️ No static CSV reservations found, returning existing reservations');
       return existingReservations;
     }
 
     // Combine reservations - existing reservations first, then static CSV
-    const mergedReservations = [...existingReservations, ...staticReservations];
+    const mergedReservations = [...existingReservations, ...allStaticReservations];
     
     // Remove duplicates based on dates, apartment, and guest name (keep existing version if conflict)
     const uniqueReservations = new Map<string, Reservation>();
@@ -695,7 +709,7 @@ export async function mergeReservationsWithStaticCSV(
 
     const finalReservations = Array.from(uniqueReservations.values());
     
-    console.log(`🔄 Merged reservations: ${existingReservations.length} existing + ${staticReservations.length} static CSV = ${finalReservations.length} total`);
+    console.log(`🔄 Merged reservations: ${existingReservations.length} existing + ${allStaticReservations.length} static CSV = ${finalReservations.length} total`);
     
     return finalReservations;
   } catch (error) {

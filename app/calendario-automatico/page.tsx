@@ -447,10 +447,10 @@ export default function AutomaticCalendarPage() {
         console.error('❌ Error fetching VRBO reservations:', error);
       }
 
-      // Merge with static CSV reservations (October 2025)
+      // Merge with static CSV reservations (October 2025 and November 2025)
       try {
         console.log('🔄 Merging static CSV reservations...');
-        allReservations = await mergeReservationsWithStaticCSV(allReservations);
+        allReservations = await mergeReservationsWithStaticCSV(allReservations, ['october_2025_reservations.csv', 'november_2025_airbnb_reservations.csv']);
         console.log(`📊 Total reservations after merging static CSV: ${allReservations.length}`);
       } catch (error) {
         console.error('❌ Error merging static CSV reservations:', error);

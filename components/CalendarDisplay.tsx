@@ -313,19 +313,19 @@ const CalendarDisplay: React.FC<CalendarDisplayProps> = ({ calendar, onDownload 
           width: '95%',
           paddingLeft: '2px',
           paddingRight: '2px',
-          fontSize: '14px'
+          fontSize: '20px'
         }}
         onClick={(e) => handleReservationClick(resInfo, e)}
       >
         {isCheckout ? (
-          <div className="text-center font-bold" style={{ fontSize: '13px' }}>SALIDA</div>
+          <div className="text-center font-bold" style={{ fontSize: '20px' }}>SALIDA</div>
         ) : isCheckin ? (
           <div className="text-center">
-            <div className="font-bold leading-tight" style={{ fontSize: '13px' }}>{reservation.Name}</div>
-            <div className="opacity-90 leading-tight" style={{ fontSize: '13px' }}>{reservation.Nights}n, {reservation.People}p</div>
+            <div className="font-bold leading-tight" style={{ fontSize: '20px' }}>{reservation.Name}</div>
+            <div className="opacity-90 leading-tight" style={{ fontSize: '16px' }}>{reservation.Nights}n, {reservation.People}p</div>
           </div>
         ) : (
-          <div className="text-center font-bold" style={{ fontSize: '13px' }}>{reservation.Name}</div>
+          <div className="text-center font-bold" style={{ fontSize: '20px' }}>{reservation.Name}</div>
         )}
       </div>
     );
